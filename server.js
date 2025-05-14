@@ -9,7 +9,8 @@ const port = process.env.PORT || 3000;
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-app.use('/', apiRouter);
+// Mount API routes at the /api path instead of root path
+app.use('/api', apiRouter);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

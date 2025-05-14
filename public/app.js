@@ -6,11 +6,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const explanationLevelInput = document.getElementById('explanationLevel');
   const showAiLogsCheckbox = document.getElementById('show-ai-logs');
   
+  // Quiz mode elements
+  const quizModeToggle = document.getElementById('quiz-mode-toggle');
+  const quizModeInput = document.getElementById('quiz-mode');
+  const quizModeInfo = document.getElementById('quiz-mode-info');
+  const explanationLevelContainer = document.getElementById('explanation-level-container');
+  const submitButtonText = document.getElementById('submit-button-text');
+  
+  // Study history elements
+  const studyHistoryToggle = document.getElementById('study-history-toggle');
+  const studyHistoryContent = document.getElementById('study-history-content');
+  const historyItems = document.getElementById('history-items');
+  const noHistoryMessage = document.getElementById('no-history-message');
+  const clearHistoryBtn = document.getElementById('clear-history');
+  
   // UI components
   const loading = document.getElementById('loading');
   const responseDiv = document.getElementById('response');
-  const explanation = document.getElementById('explanation');
-  const quizContainer = document.getElementById('quiz-container');
+  const explanation = document.getElementById('explanation-content');
+  const quizContainer = document.getElementById('quiz-questions');
   const quizControls = document.getElementById('quiz-controls');
   const quizResults = document.getElementById('quiz-results');
   const scoreDisplay = document.getElementById('score-display');
@@ -20,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const resourcesContainer = document.getElementById('resources-container');
   const errorDiv = document.getElementById('error');
   const errorText = document.getElementById('error-text');
+  const explanationSection = document.getElementById('explanation-section');
+  const quizSection = document.getElementById('quiz-section');
+  const practiceQuestionsTitle = document.getElementById('practice-questions-title');
   
   // New UI elements
   const explanationLevelOptions = document.querySelectorAll('.explanation-level-option');
@@ -36,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const voiceInputBtn = document.getElementById('voice-input-btn');
   const voiceStatus = document.getElementById('voice-status');
   const textToSpeechBtn = document.getElementById('text-to-speech-btn');
+  
+  // Study history storage
+  let studyHistory = loadStudyHistory();
   
   // Speech recognition setup
   let recognition = null;
@@ -203,178 +223,245 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   // Toggle export dropdown
-  exportBtn.addEventListener('click', () => {
-    exportDropdown.classList.toggle('hidden');
-  });
+  if (exportBtn && exportDropdown) {
+    exportBtn.addEventListener('click', () => {
+      exportDropdown.classList.toggle('hidden');
+    });
   
-  // Close export dropdown when clicking elsewhere
-  document.addEventListener('click', (event) => {
-    if (!exportBtn.contains(event.target) && !exportDropdown.contains(event.target)) {
-      exportDropdown.classList.add('hidden');
-    }
-  });
+    // Close export dropdown when clicking elsewhere
+    document.addEventListener('click', (event) => {
+      if (!exportBtn.contains(event.target) && !exportDropdown.contains(event.target)) {
+        exportDropdown.classList.add('hidden');
+      }
+    });
+  }
   
   // Copy explanation to clipboard
-  copyExplanationBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(explanation.innerText);
-      showNotification('Copied to clipboard!');
-    } catch (err) {
-      showNotification('Failed to copy text', true);
-    }
-  });
+  if (copyExplanationBtn) {
+    copyExplanationBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(explanation.innerText);
+        showNotification('Copied to clipboard!');
+      } catch (err) {
+        showNotification('Failed to copy text', true);
+      }
+    });
+  }
   
   // Export as PDF
-  exportPdfBtn.addEventListener('click', () => {
-    exportDropdown.classList.add('hidden');
-    
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    const title = `3MTT Study Assistant - ${courseSelect.value}: ${questionInput.value}`;
-    const content = explanation.innerText;
-    
-    doc.setFontSize(16);
-    doc.text(title, 20, 20);
-    
-    doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(content, 170);
-    doc.text(splitText, 20, 30);
-    
-    doc.save(`3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.pdf`);
-    showNotification('PDF downloaded!');
-  });
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', () => {
+      exportDropdown.classList.add('hidden');
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      const title = `3MTT Study Assistant - ${courseSelect.value}: ${questionInput.value}`;
+      const content = explanation.innerText;
+      
+      doc.setFontSize(16);
+      doc.text(title, 20, 20);
+      
+      doc.setFontSize(12);
+      const splitText = doc.splitTextToSize(content, 170);
+      doc.text(splitText, 20, 30);
+      
+      doc.save(`3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.pdf`);
+      showNotification('PDF downloaded!');
+    });
+  }
   
   // Export as Text
-  exportTextBtn.addEventListener('click', () => {
-    exportDropdown.classList.add('hidden');
-    
-    const title = `3MTT Study Assistant - ${courseSelect.value}: ${questionInput.value}\n\n`;
-    const content = explanation.innerText;
-    const fullText = title + content;
-    
-    const blob = new Blob([fullText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.txt`;
-    a.click();
-    
-    URL.revokeObjectURL(url);
-    showNotification('Text file downloaded!');
-  });
+  if (exportTextBtn) {
+    exportTextBtn.addEventListener('click', () => {
+      exportDropdown.classList.add('hidden');
+      
+      const title = `3MTT Study Assistant - ${courseSelect.value}: ${questionInput.value}\n\n`;
+      const content = explanation.innerText;
+      const fullText = title + content;
+      
+      const blob = new Blob([fullText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.txt`;
+      a.click();
+      
+      URL.revokeObjectURL(url);
+      showNotification('Text file downloaded!');
+    });
+  }
   
   // Toggle AI log size
-  toggleLogSizeBtn.addEventListener('click', () => {
-    const aiLog = aiLogContainer.querySelector('.ai-log');
-    const isExpanded = aiLog.style.maxHeight === 'none';
-    
-    if (isExpanded) {
-      aiLog.style.maxHeight = '250px';
-      toggleLogSizeBtn.innerHTML = '<i class="bx bx-expand-alt"></i> Expand';
-    } else {
-      aiLog.style.maxHeight = 'none';
-      toggleLogSizeBtn.innerHTML = '<i class="bx bx-collapse-alt"></i> Collapse';
-    }
-  });
+  if (toggleLogSizeBtn) {
+    toggleLogSizeBtn.addEventListener('click', () => {
+      const aiLog = aiLogContainer.querySelector('.ai-log');
+      const isExpanded = aiLog.style.maxHeight === 'none';
+      
+      if (isExpanded) {
+        aiLog.style.maxHeight = '250px';
+        toggleLogSizeBtn.innerHTML = '<i class="bx bx-expand-alt"></i> Expand';
+      } else {
+        aiLog.style.maxHeight = 'none';
+        toggleLogSizeBtn.innerHTML = '<i class="bx bx-collapse-alt"></i> Collapse';
+      }
+    });
+  }
   
   // Show/hide AI logs
-  showAiLogsCheckbox.addEventListener('change', () => {
-    if (currentRequestData.prompt) {
-      aiLogContainer.classList.toggle('hidden', !showAiLogsCheckbox.checked);
-    }
-  });
+  if (showAiLogsCheckbox) {
+    showAiLogsCheckbox.addEventListener('change', () => {
+      if (currentRequestData.prompt && aiLogContainer) {
+        aiLogContainer.classList.toggle('hidden', !showAiLogsCheckbox.checked);
+      }
+    });
+  }
   
   // Form submission
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    
-    const course = courseSelect.value;
-    const question = questionInput.value;
-    const explanationLevel = explanationLevelInput.value;
-    
-    if (!question.trim()) {
-      showError('Please enter a question or topic.');
-      return;
-    }
-    
-    // Reset UI state
-    resetUI();
-    
-    // Show loading state
-    loading.classList.remove('hidden');
-    
-    try {
-      // Prepare request data for logging
-      currentRequestData = {
-        course,
-        question,
-        explanationLevel,
-        timestamp: new Date().toISOString(),
-        prompt: `${explanationLevel === 'simple' ? 'Explain like I\'m 5: ' : 'Technical explanation: '}"${question}" related to ${course}`
-      };
+  if (form) {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
       
-      // Make API request
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ course, question, explanationLevel }),
-      });
+      const course = courseSelect.value;
+      const question = questionInput.value;
+      const explanationLevel = explanationLevelInput.value;
+      const quizMode = quizModeInput.value;
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch response');
+      if (!question.trim()) {
+        showError('Please enter a question or topic.');
+        return;
       }
       
-      const data = await response.json();
+      // Reset UI state
+      resetUI();
       
-      // Store response data for logging
-      currentResponseData = {
-        timestamp: new Date().toISOString(),
-        data: data
-      };
+      // Show loading state
+      loading.classList.remove('hidden');
       
-      // Update AI logs
-      updateAILogs();
-      
-      // Update explanation
-      explanation.textContent = data.explanation || 'No explanation provided.';
-      
-      // Update questions
-      questionsData = data.questions || [];
-      renderQuiz(questionsData);
-      
-      // Render resources
-      renderResources(data.resources || []);
-      
-      // Show response
-      responseDiv.classList.remove('hidden');
-      
-      // Show quiz controls if we have questions
-      if (questionsData.length > 0) {
-        quizControls.classList.remove('hidden');
+      try {
+        // Prepare request data for logging
+        currentRequestData = {
+          course,
+          question,
+          explanationLevel,
+          quizMode,
+          timestamp: new Date().toISOString(),
+          prompt: quizMode === 'true' 
+            ? `Generate a quiz on "${question}" related to ${course}`
+            : `${explanationLevel === 'simple' ? 'Explain like I\'m 5: ' : 'Technical explanation: '}"${question}" related to ${course}`
+        };
+        
+        // Make API request
+        const response = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            course, 
+            question, 
+            explanationLevel,
+            quizMode
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch response');
+        }
+        
+        const data = await response.json();
+        
+        // Store response data for logging
+        currentResponseData = {
+          timestamp: new Date().toISOString(),
+          data: data
+        };
+        
+        // Update AI logs
+        updateAILogs();
+        
+        // Update the UI based on quiz mode
+        if (quizMode === 'true') {
+          // In quiz mode, hide the explanation section
+          explanationSection.classList.add('hidden');
+          
+          // Set the quiz title
+          practiceQuestionsTitle.textContent = 'Quiz Questions';
+          
+          // Update questions
+          questionsData = data.questions || [];
+          renderQuiz(questionsData);
+          
+          // Add to study history if valid questions were returned
+          if (questionsData.length > 0) {
+            addToStudyHistory({
+              course,
+              question,
+              explanationLevel,
+              quizMode,
+              timestamp: new Date().toISOString(),
+              summary: `Quiz with ${questionsData.length} questions on ${question}`
+            });
+          }
+        } else {
+          // Regular explanation mode
+          explanationSection.classList.remove('hidden');
+          
+          // Set the practice questions title
+          practiceQuestionsTitle.textContent = 'Practice Questions';
+          
+          // Update explanation
+          explanation.textContent = data.explanation || 'No explanation provided.';
+          
+          // Update questions
+          questionsData = data.questions || [];
+          renderQuiz(questionsData);
+          
+          // Render resources
+          renderResources(data.resources || []);
+          
+          // Add to study history
+          addToStudyHistory({
+            course,
+            question,
+            explanationLevel,
+            quizMode,
+            timestamp: new Date().toISOString(),
+            summary: data.explanation ? data.explanation.substring(0, 150) + '...' : 'No explanation provided.'
+          });
+        }
+        
+        // Show response
+        responseDiv.classList.remove('hidden');
+        
+        // Show quiz controls if we have questions
+        if (questionsData.length > 0) {
+          quizControls.classList.remove('hidden');
+          quizSection.classList.remove('hidden');
+        } else {
+          quizSection.classList.add('hidden');
+        }
+        
+        // Show AI logs if enabled
+        if (showAiLogsCheckbox.checked) {
+          aiLogContainer.classList.remove('hidden');
+        }
+        
+      } catch (error) {
+        console.error(error);
+        showError(error.message || 'An error occurred. Please try again.');
+      } finally {
+        loading.classList.add('hidden');
       }
-      
-      // Show AI logs if enabled
-      if (showAiLogsCheckbox.checked) {
-        aiLogContainer.classList.remove('hidden');
-      }
-      
-    } catch (error) {
-      console.error(error);
-      showError(error.message || 'An error occurred. Please try again.');
-    } finally {
-      loading.classList.add('hidden');
-    }
-  });
+    });
+  }
   
   // Update AI logs in the UI
   function updateAILogs() {
     const requestLog = JSON.stringify(currentRequestData, null, 2);
     const responsePreview = JSON.stringify({
-      explanation: currentResponseData.data.explanation.substring(0, 100) + '...',
-      questionCount: currentResponseData.data.questions ? currentResponseData.data.questions.length : 0,
-      resourceCount: currentResponseData.data.resources ? currentResponseData.data.resources.length : 0
+      explanation: currentResponseData.data && currentResponseData.data.explanation ? currentResponseData.data.explanation.substring(0, 100) + '...' : 'No explanation provided',
+      questionCount: currentResponseData.data && currentResponseData.data.questions ? currentResponseData.data.questions.length : 0,
+      resourceCount: currentResponseData.data && currentResponseData.data.resources ? currentResponseData.data.resources.length : 0
     }, null, 2);
     
     const log = `// Request - ${currentRequestData.timestamp}
@@ -383,16 +470,20 @@ ${requestLog}
 // Response - ${currentResponseData.timestamp}
 ${responsePreview}`;
     
-    aiLogContent.textContent = log;
+    if (aiLogContent) {
+      aiLogContent.textContent = log;
+    } else {
+      console.warn('AI log content element not found');
+    }
   }
   
   // Reset UI state
   function resetUI() {
-    responseDiv.classList.add('hidden');
-    errorDiv.classList.add('hidden');
-    quizResults.classList.add('hidden');
-    aiLogContainer.classList.add('hidden');
-    exportDropdown.classList.add('hidden');
+    if (responseDiv) responseDiv.classList.add('hidden');
+    if (errorDiv) errorDiv.classList.add('hidden');
+    if (quizResults) quizResults.classList.add('hidden');
+    if (aiLogContainer) aiLogContainer.classList.add('hidden');
+    if (exportDropdown) exportDropdown.classList.add('hidden');
     
     // Stop any ongoing speech
     if (isSpeaking && synth) {
@@ -579,115 +670,123 @@ ${responsePreview}`;
   }
   
   // Handle quiz submission
-  submitQuizBtn.addEventListener('click', () => {
-    let score = 0;
-    const feedback = [];
-    
-    questionsData.forEach((q, questionIndex) => {
-      const selectedOption = document.querySelector(`input[name="question-${questionIndex}"]:checked`);
-      const questionResult = document.createElement('div');
-      questionResult.className = 'mb-3 p-3 border-b';
+  if (submitQuizBtn) {
+    submitQuizBtn.addEventListener('click', () => {
+      let score = 0;
+      const feedback = [];
       
-      // Create the question text
-      const questionText = document.createElement('p');
-      questionText.className = 'font-medium mb-2';
-      questionText.textContent = `${questionIndex + 1}. ${q.question}`;
-      questionResult.appendChild(questionText);
-      
-      if (!selectedOption) {
-        // No answer selected
-        const noAnswer = document.createElement('div');
-        noAnswer.className = 'flex items-center gap-2 text-yellow-600';
+      questionsData.forEach((q, questionIndex) => {
+        const selectedOption = document.querySelector(`input[name="question-${questionIndex}"]:checked`);
+        const questionResult = document.createElement('div');
+        questionResult.className = 'mb-3 p-3 border-b';
         
-        const icon = document.createElement('i');
-        icon.className = 'bx bx-error';
+        // Create the question text
+        const questionText = document.createElement('p');
+        questionText.className = 'font-medium mb-2';
+        questionText.textContent = `${questionIndex + 1}. ${q.question}`;
+        questionResult.appendChild(questionText);
         
-        const text = document.createElement('span');
-        text.textContent = 'Not answered. Correct answer: ' + q.options[q.correctAnswer];
-        
-        noAnswer.appendChild(icon);
-        noAnswer.appendChild(text);
-        questionResult.appendChild(noAnswer);
-      } else {
-        const selectedIndex = parseInt(selectedOption.value);
-        const isCorrect = selectedIndex === q.correctAnswer;
-        
-        if (isCorrect) {
-          score++;
-          const correct = document.createElement('div');
-          correct.className = 'flex items-center gap-2 text-green-600';
+        if (!selectedOption) {
+          // No answer selected
+          const noAnswer = document.createElement('div');
+          noAnswer.className = 'flex items-center gap-2 text-yellow-600';
           
           const icon = document.createElement('i');
-          icon.className = 'bx bx-check-circle';
+          icon.className = 'bx bx-error';
           
           const text = document.createElement('span');
-          text.textContent = 'Correct! ' + q.options[q.correctAnswer];
+          text.textContent = 'Not answered. Correct answer: ' + q.options[q.correctAnswer];
           
-          correct.appendChild(icon);
-          correct.appendChild(text);
-          questionResult.appendChild(correct);
+          noAnswer.appendChild(icon);
+          noAnswer.appendChild(text);
+          questionResult.appendChild(noAnswer);
         } else {
-          const wrong = document.createElement('div');
-          wrong.className = 'flex items-center gap-2 text-red-600';
+          const selectedIndex = parseInt(selectedOption.value);
+          const isCorrect = selectedIndex === q.correctAnswer;
           
-          const iconWrong = document.createElement('i');
-          iconWrong.className = 'bx bx-x-circle';
-          
-          const textWrong = document.createElement('span');
-          textWrong.textContent = `Incorrect. You selected: ${q.options[selectedIndex]}`;
-          
-          wrong.appendChild(iconWrong);
-          wrong.appendChild(textWrong);
-          questionResult.appendChild(wrong);
-          
-          const correct = document.createElement('div');
-          correct.className = 'flex items-center gap-2 text-green-600 mt-2';
-          
-          const iconCorrect = document.createElement('i');
-          iconCorrect.className = 'bx bx-check-circle';
-          
-          const textCorrect = document.createElement('span');
-          textCorrect.textContent = `Correct answer: ${q.options[q.correctAnswer]}`;
-          
-          correct.appendChild(iconCorrect);
-          correct.appendChild(textCorrect);
-          questionResult.appendChild(correct);
+          if (isCorrect) {
+            score++;
+            const correct = document.createElement('div');
+            correct.className = 'flex items-center gap-2 text-green-600';
+            
+            const icon = document.createElement('i');
+            icon.className = 'bx bx-check-circle';
+            
+            const text = document.createElement('span');
+            text.textContent = 'Correct! ' + q.options[q.correctAnswer];
+            
+            correct.appendChild(icon);
+            correct.appendChild(text);
+            questionResult.appendChild(correct);
+          } else {
+            const wrong = document.createElement('div');
+            wrong.className = 'flex items-center gap-2 text-red-600';
+            
+            const iconWrong = document.createElement('i');
+            iconWrong.className = 'bx bx-x-circle';
+            
+            const textWrong = document.createElement('span');
+            textWrong.textContent = `Incorrect. You selected: ${q.options[selectedIndex]}`;
+            
+            wrong.appendChild(iconWrong);
+            wrong.appendChild(textWrong);
+            questionResult.appendChild(wrong);
+            
+            const correct = document.createElement('div');
+            correct.className = 'flex items-center gap-2 text-green-600 mt-2';
+            
+            const iconCorrect = document.createElement('i');
+            iconCorrect.className = 'bx bx-check-circle';
+            
+            const textCorrect = document.createElement('span');
+            textCorrect.textContent = `Correct answer: ${q.options[q.correctAnswer]}`;
+            
+            correct.appendChild(iconCorrect);
+            correct.appendChild(textCorrect);
+            questionResult.appendChild(correct);
+          }
         }
+        
+        feedback.push(questionResult);
+      });
+      
+      // Update score and show feedback
+      if (scoreDisplay) scoreDisplay.textContent = `${score}/${questionsData.length}`;
+      
+      if (quizFeedback) {
+        quizFeedback.innerHTML = '';
+        feedback.forEach(item => quizFeedback.appendChild(item));
       }
       
-      feedback.push(questionResult);
+      if (quizResults) {
+        quizResults.classList.remove('hidden');
+        
+        // Scroll to results
+        quizResults.scrollIntoView({ behavior: 'smooth' });
+      }
     });
-    
-    // Update score and show feedback
-    scoreDisplay.textContent = `${score}/${questionsData.length}`;
-    
-    quizFeedback.innerHTML = '';
-    feedback.forEach(item => quizFeedback.appendChild(item));
-    
-    quizResults.classList.remove('hidden');
-    
-    // Scroll to results
-    quizResults.scrollIntoView({ behavior: 'smooth' });
-  });
+  }
   
   // Reset the quiz
-  resetQuizBtn.addEventListener('click', () => {
-    // Clear all selections
-    document.querySelectorAll('input[type="radio"]').forEach(input => {
-      input.checked = false;
+  if (resetQuizBtn) {
+    resetQuizBtn.addEventListener('click', () => {
+      // Clear all selections
+      document.querySelectorAll('input[type="radio"]').forEach(input => {
+        input.checked = false;
+      });
+      
+      // Remove selected styling
+      document.querySelectorAll('.quiz-option').forEach(option => {
+        option.classList.remove('quiz-option-selected');
+      });
+      
+      // Hide results
+      if (quizResults) quizResults.classList.add('hidden');
+      
+      // Scroll back to questions
+      quizContainer.scrollIntoView({ behavior: 'smooth' });
     });
-    
-    // Remove selected styling
-    document.querySelectorAll('.quiz-option').forEach(option => {
-      option.classList.remove('quiz-option-selected');
-    });
-    
-    // Hide results
-    quizResults.classList.add('hidden');
-    
-    // Scroll back to questions
-    quizContainer.scrollIntoView({ behavior: 'smooth' });
-  });
+  }
 
   // Initialize voice synthesis when page loads
   if (synth) {
@@ -717,4 +816,201 @@ ${responsePreview}`;
       console.log(`Loaded ${voices.length} voices for speech synthesis`);
     });
   }
+
+  // Quiz mode toggle handler
+  if (quizModeToggle) {
+    quizModeToggle.addEventListener('change', () => {
+      const isQuizMode = quizModeToggle.checked;
+      quizModeInput.value = isQuizMode.toString();
+      document.body.classList.toggle('quiz-mode-active', isQuizMode);
+      quizModeInfo.classList.toggle('hidden', !isQuizMode);
+      submitButtonText.textContent = isQuizMode ? 'Generate Quiz' : 'Get Assistance';
+    });
+  }
+  
+  // Study history toggle handler
+  if (studyHistoryToggle) {
+    studyHistoryToggle.addEventListener('click', () => {
+      studyHistoryContent.classList.toggle('hidden');
+      const chevron = studyHistoryToggle.querySelector('.bx-chevron-down');
+      chevron.classList.toggle('rotate-180');
+      
+      // Load study history if it's being displayed
+      if (!studyHistoryContent.classList.contains('hidden')) {
+        renderStudyHistory();
+      }
+    });
+  }
+  
+  // Clear study history
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to clear your entire study history?')) {
+        clearStudyHistory();
+        renderStudyHistory();
+        showNotification('Study history cleared');
+      }
+    });
+  }
+  
+  // Study history functions
+  function loadStudyHistory() {
+    try {
+      const historyString = localStorage.getItem('3mtt-study-history');
+      return historyString ? JSON.parse(historyString) : [];
+    } catch (error) {
+      console.error('Error loading study history:', error);
+      return [];
+    }
+  }
+  
+  function saveStudyHistory(history) {
+    try {
+      localStorage.setItem('3mtt-study-history', JSON.stringify(history));
+    } catch (error) {
+      console.error('Error saving study history:', error);
+    }
+  }
+  
+  function addToStudyHistory(item) {
+    // Add new item to the beginning of the array
+    studyHistory.unshift(item);
+    
+    // Keep only the most recent 50 items
+    if (studyHistory.length > 50) {
+      studyHistory = studyHistory.slice(0, 50);
+    }
+    
+    saveStudyHistory(studyHistory);
+  }
+  
+  function clearStudyHistory() {
+    studyHistory = [];
+    saveStudyHistory(studyHistory);
+  }
+  
+  function renderStudyHistory() {
+    historyItems.innerHTML = '';
+    
+    if (studyHistory.length === 0) {
+      noHistoryMessage.classList.remove('hidden');
+      return;
+    }
+    
+    noHistoryMessage.classList.add('hidden');
+    
+    studyHistory.forEach((item, index) => {
+      const historyItem = document.createElement('div');
+      historyItem.className = 'history-item';
+      historyItem.dataset.index = index;
+      
+      const header = document.createElement('div');
+      header.className = 'history-item-header';
+      
+      const topicAndCourse = document.createElement('div');
+      topicAndCourse.className = 'flex items-center gap-2';
+      
+      const topic = document.createElement('div');
+      topic.className = 'history-item-topic';
+      topic.textContent = item.question;
+      
+      const course = document.createElement('div');
+      course.className = 'history-item-course';
+      course.textContent = item.course;
+      
+      topicAndCourse.appendChild(topic);
+      topicAndCourse.appendChild(course);
+      
+      const date = document.createElement('div');
+      date.className = 'history-item-date';
+      date.textContent = formatDate(new Date(item.timestamp));
+      
+      header.appendChild(topicAndCourse);
+      header.appendChild(date);
+      
+      const summary = document.createElement('div');
+      summary.className = 'history-item-summary';
+      summary.textContent = item.summary;
+      
+      const actions = document.createElement('div');
+      actions.className = 'history-item-actions';
+      
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'history-action-btn';
+      loadBtn.innerHTML = '<i class="bx bx-refresh"></i> Load';
+      loadBtn.addEventListener('click', () => {
+        loadHistoryItem(item);
+      });
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'history-action-btn';
+      deleteBtn.innerHTML = '<i class="bx bx-trash"></i> Remove';
+      deleteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        removeHistoryItem(index);
+      });
+      
+      actions.appendChild(loadBtn);
+      actions.appendChild(deleteBtn);
+      
+      historyItem.appendChild(header);
+      historyItem.appendChild(summary);
+      historyItem.appendChild(actions);
+      
+      historyItems.appendChild(historyItem);
+    });
+  }
+  
+  function formatDate(date) {
+    const now = new Date();
+    const diff = now - date;
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    
+    if (diff < minute) {
+      return 'Just now';
+    } else if (diff < hour) {
+      const minutes = Math.floor(diff / minute);
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else if (diff < day) {
+      const hours = Math.floor(diff / hour);
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  }
+  
+  function loadHistoryItem(item) {
+    courseSelect.value = item.course;
+    questionInput.value = item.question;
+    explanationLevelInput.value = item.explanationLevel;
+    
+    // Update the explanation level UI
+    explanationLevelOptions.forEach(option => {
+      option.classList.toggle('active', option.dataset.level === item.explanationLevel);
+    });
+    
+    // Set quiz mode
+    quizModeToggle.checked = item.quizMode === 'true';
+    quizModeInput.value = item.quizMode;
+    document.body.classList.toggle('quiz-mode-active', quizModeToggle.checked);
+    quizModeInfo.classList.toggle('hidden', !quizModeToggle.checked);
+    submitButtonText.textContent = quizModeToggle.checked ? 'Generate Quiz' : 'Get Assistance';
+    
+    // Scroll to top of the form
+    form.scrollIntoView({ behavior: 'smooth' });
+    
+    showNotification('Topic loaded from history');
+  }
+  
+  function removeHistoryItem(index) {
+    studyHistory.splice(index, 1);
+    saveStudyHistory(studyHistory);
+    renderStudyHistory();
+    showNotification('Topic removed from history');
+  }
+  
+  // Initialize the study history
+  renderStudyHistory();
 });

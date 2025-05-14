@@ -1,8 +1,8 @@
 const express = require('express');
-const { getResult } = require('../controllers/apiController.js');
-
 const router = express.Router();
+const apiController = require('../controllers/apiController');
 
-router.post('/api/ask', getResult);
+// API route for asking questions
+router.post('/ask', apiController.handleAskRequest);
 
 module.exports = router;
