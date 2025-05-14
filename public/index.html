@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3MTT Study Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="text-2xl font-bold py-2">3MTT Study Assistant</h1>
+      <p class="text-sm opacity-80">Empowering Technical Talent with AI-assisted Learning</p>
+    </div>
+    
+    <div class="content-box">
+      <form id="ask-form">
+        <div class="form-group">
+          <label for="course" class="form-label">Select Course/Track</label>
+          <select id="course" class="form-select">
+            <option value="Frontend">Frontend Development</option>
+            <option value="Backend">Backend Development</option>
+            <option value="Product">Product Management</option>
+            <option value="UI/UX">UI/UX Design</option>
+            <option value="Data Science">Data Science</option>
+            <option value="Cybersecurity">Cybersecurity</option>
+            <option value="Cloud Computing">Cloud Computing</option>
+            <option value="DevOps">DevOps</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="question" class="form-label">Your Question or Topic</label>
+          <textarea id="question" rows="3" class="form-control" placeholder="What would you like to learn about?"></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-primary w-full">Get Assistance</button>
+      </form>
+      
+      <div id="loading" class="loader hidden">
+        <div class="loader-spinner"></div>
+      </div>
+      
+      <div id="response" class="hidden">
+        <div class="result-section">
+          <h2 class="result-title text-xl">Explanation</h2>
+          <p id="explanation" class="text-gray-700"></p>
+        </div>
+        
+        <div class="result-section">
+          <h2 class="result-title text-xl">Practice Questions</h2>
+          <ul id="questions" class="question-list"></ul>
+        </div>
+      </div>
+      
+      <div id="error" class="error-message hidden">An error occurred. Please try again.</div>
+    </div>
+    
+    <div class="footer">
+      <p>Powered by the <a href="https://3mtt.nitda.gov.ng/" target="_blank">3 Million Technical Talent</a> Programme</p>
+    </div>
+  </div>
+  
+  <script src="app.js"></script>
+</body>
+</html>
