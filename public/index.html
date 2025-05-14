@@ -2,13 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport"="width=device-width, initial-scale=1.0">
   <title>3MTT Study Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Add boxicons for icons -->
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <!-- Add jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -20,7 +25,9 @@
     <div class="content-box">
       <form id="ask-form">
         <div class="form-group">
-          <label for="course" class="form-label">Select Course/Track</label>
+          <label for="course" class="form-label flex items-center gap-2">
+            <i class='bx bxs-book-alt'></i> Select Course/Track
+          </label>
           <select id="course" class="form-select">
             <option value="Frontend">Frontend Development</option>
             <option value="Backend">Backend Development</option>
@@ -34,30 +41,139 @@
         </div>
         
         <div class="form-group">
-          <label for="question" class="form-label">Your Question or Topic</label>
-          <textarea id="question" rows="3" class="form-control" placeholder="What would you like to learn about?"></textarea>
+          <label for="question" class="form-label flex items-center gap-2">
+            <i class='bx bx-question-mark'></i> Your Question or Topic
+          </label>
+          <div class="relative">
+            <textarea id="question" rows="3" class="form-control pr-10" placeholder="What would you like to learn about?"></textarea>
+            <button type="button" id="voice-input-btn" class="absolute right-2 top-2 p-2 text-gray-500 hover:text-primary-color transition-colors" title="Talk instead">
+              <i class='bx bx-microphone text-xl'></i>
+            </button>
+          </div>
+          <div id="voice-status" class="mt-1 text-sm hidden">
+            <span class="flex items-center gap-1"><i class='bx bx-pulse text-primary-color'></i> Listening...</span>
+          </div>
         </div>
         
-        <button type="submit" class="btn btn-primary w-full">Get Assistance</button>
+        <div class="form-group">
+          <label class="form-label flex items-center gap-2">
+            <i class='bx bx-list-ul'></i> Explanation Level
+          </label>
+          <div class="explanation-level-selector">
+            <div class="explanation-level-option active" data-level="simple">
+              <i class='bx bx-child'></i>
+              <span>Explain Like I'm 5</span>
+            </div>
+            <div class="explanation-level-option" data-level="advanced">
+              <i class='bx bx-code-block'></i>
+              <span>Technical Explanation</span>
+            </div>
+          </div>
+          <input type="hidden" name="explanationLevel" id="explanationLevel" value="simple">
+        </div>
+        
+        <div class="form-group">
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2">
+              <i class='bx bx-code'></i> Show AI Model Logs
+              <label class="toggle-switch ml-2">
+                <input type="checkbox" id="show-ai-logs">
+                <span class="toggle-slider"></span>
+              </label>
+            </label>
+          </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary w-full">
+          <i class='bx bx-search-alt'></i> Get Assistance
+        </button>
       </form>
       
       <div id="loading" class="loader hidden">
         <div class="loader-spinner"></div>
+        <p class="loader-text">Generating your personalized learning content...</p>
       </div>
       
       <div id="response" class="hidden">
         <div class="result-section">
-          <h2 class="result-title text-xl">Explanation</h2>
-          <p id="explanation" class="text-gray-700"></p>
+          <div class="flex items-center justify-between">
+            <h2 class="result-title text-xl">
+              <i class='bx bx-bulb'></i> Explanation
+            </h2>
+            <div class="btn-group">
+              <button id="text-to-speech-btn" class="btn btn-outline btn-icon" title="Listen to explanation">
+                <i class='bx bx-volume-full'></i>
+              </button>
+              <button id="copy-explanation" class="btn btn-outline btn-icon" title="Copy to clipboard">
+                <i class='bx bx-copy'></i>
+              </button>
+              <div class="export-options">
+                <button id="export-btn" class="btn btn-outline btn-icon" title="Export options">
+                  <i class='bx bx-export'></i>
+                </button>
+                <div id="export-dropdown" class="export-dropdown hidden">
+                  <div class="export-option" id="export-pdf">
+                    <i class='bx bxs-file-pdf'></i> Export as PDF
+                  </div>
+                  <div class="export-option" id="export-text">
+                    <i class='bx bxs-file-txt'></i> Save as Text
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="explanation-content" id="explanation"></div>
+          
+          <div id="ai-log-container" class="hidden">
+            <div class="ai-log">
+              <div class="ai-log-header">
+                <span>AI Model Request/Response</span>
+                <button class="ai-log-toggle" id="toggle-log-size">
+                  <i class='bx bx-expand-alt'></i> Expand
+                </button>
+              </div>
+              <pre id="ai-log-content"></pre>
+            </div>
+          </div>
         </div>
         
         <div class="result-section">
-          <h2 class="result-title text-xl">Practice Questions</h2>
-          <ul id="questions" class="question-list"></ul>
+          <h2 class="result-title text-xl">
+            <i class='bx bx-link-external'></i> Recommended Resources
+          </h2>
+          <div id="resources-container" class="resources-grid">
+            <!-- Resources will be dynamically inserted here -->
+          </div>
+        </div>
+        
+        <div class="result-section">
+          <h2 class="result-title text-xl">
+            <i class='bx bx-question-mark'></i> Practice Questions
+          </h2>
+          <div id="quiz-container" class="space-y-6"></div>
+          
+          <div id="quiz-controls" class="mt-6 hidden">
+            <button id="submit-quiz" class="btn btn-primary mr-2">
+              <i class='bx bx-check'></i> Submit Answers
+            </button>
+            <button id="reset-quiz" class="btn btn-secondary">
+              <i class='bx bx-reset'></i> Try Again
+            </button>
+          </div>
+          
+          <div id="quiz-results" class="mt-6 hidden">
+            <div class="bg-gray-100 p-4 rounded">
+              <h3 class="font-bold text-lg">Your Score: <span id="score-display">0/0</span></h3>
+              <div id="quiz-feedback" class="mt-3"></div>
+            </div>
+          </div>
         </div>
       </div>
       
-      <div id="error" class="error-message hidden">An error occurred. Please try again.</div>
+      <div id="error" class="error-message hidden">
+        <i class='bx bx-error-circle'></i>
+        <span id="error-text">An error occurred. Please try again.</span>
+      </div>
     </div>
     
     <div class="footer">
