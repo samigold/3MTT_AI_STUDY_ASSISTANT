@@ -491,8 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timestamp: new Date().toISOString(),
         prompt: `${explanationLevel === 'simple' ? 'Explain like I\'m 5: ' : 'Technical explanation: '}"${question}" related to ${course}`
       };
-      
-      // Make API request
+        // Make API request
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -500,8 +499,16 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch response');
+        let errorMessage = 'Failed to fetch response';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          // If the response isn't valid JSON, just use the default error message
+          console.error('Error parsing error response:', parseError);
+          errorMessage = `${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();

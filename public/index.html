@@ -17,9 +17,12 @@
   <!-- Add highlight.js for code syntax highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-  <!-- Add jsPDF for PDF export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Add jsPDF for PDF export -->  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Socket.IO for the guessing game -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Game styles -->
+  <link rel="stylesheet" href="game.css">
 </head>
 <body>
   <div class="container">
@@ -194,7 +197,8 @@
       </div>
     </div>
   </div>
-  
-  <script src="app.js"></script>
+    <script src="app.js"></script>
+  <!-- Game integration script -->
+  <script src="game.js"></script>
 </body>
 </html>

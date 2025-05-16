@@ -601,9 +601,7 @@ body::before {
 .footer {
   margin-top: 2rem;
   padding: 1.5rem 0;
-  background-color: rgba(255, 255, 255, 0.7);
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  background-color: var(--gray-100);
   border-top: 1px solid var(--gray-300);
   text-align: center;
 }
@@ -1122,42 +1120,6 @@ input:checked + .toggle-slider:before {
   .bx {
     filter: brightness(1.2);
   }
-  
-  .footer {
-    background-color: rgba(30, 30, 30, 0.7);
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
-    border-top-color: var(--gray-300);
-  }
-}
-  
-  .form-control,
-  .form-select {
-    background-color: #2d2d2d;
-    border-color: #404040;
-    color: #e0e0e0;
-  }
-  
-  .explanation-content {
-    background-color: #1a1a1a;
-    border-left-color: var(--primary-color);
-  }
-  
-  .explanation-content code {
-    background-color: #2d2d2d;
-  }
-  
-  /* Invert icons for dark mode */
-  .bx {
-    filter: brightness(1.2);
-  }
-  
-  .footer {
-    background-color: rgba(30, 30, 30, 0.7);
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
-    border-top-color: var(--gray-300);
-  }
 }
 
 /* Animation improvements for mobile - reduce motion if preferred */
@@ -1500,12 +1462,12 @@ input:checked + .toggle-slider:before {
 
 @keyframes slideInRight {
   from { transform: translateX(30px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1); }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes expand {
   from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1); }
+  to { transform: scale(1); opacity: 1; }
 }
 
 /* Apply animations only if user doesn't prefer reduced motion */
