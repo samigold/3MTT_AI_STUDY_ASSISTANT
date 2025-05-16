@@ -73,8 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSimpleExplanation = '';
   let currentTechnicalExplanation = '';
   let currentExplanationType = 'simple';
-  
-  // Function to toggle between simple and technical explanations
+    // Function to toggle between simple and technical explanations with improved responsive UI
   function toggleExplanationType() {
     if (!currentSimpleExplanation || !currentTechnicalExplanation) {
       showNotification('Both explanation types are not available', true);
@@ -91,27 +90,63 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    if (currentExplanationType === 'simple') {
-      currentExplanationType = 'technical';
-      const formattedExplanation = formatExplanation(currentTechnicalExplanation);
-      explanation.innerHTML = formattedExplanation;
-      toggleExplanationBtn.textContent = 'Switch to Simple Explanation';
-      toggleExplanationBtn.classList.remove('btn-primary');
-      toggleExplanationBtn.classList.add('btn-secondary');
-    } else {
-      currentExplanationType = 'simple';
-      const formattedExplanation = formatExplanation(currentSimpleExplanation);
-      explanation.innerHTML = formattedExplanation;
-      toggleExplanationBtn.textContent = 'Switch to Technical Explanation';
-      toggleExplanationBtn.classList.remove('btn-secondary');
-      toggleExplanationBtn.classList.add('btn-primary');
-    }
-    // Apply syntax highlighting if highlight.js is available
-    if (typeof hljs !== 'undefined' && explanation) {
-      explanation.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-      });
-    }
+    // Add transition for smoother content change
+    explanation.style.transition = 'opacity 0.3s ease';
+    explanation.style.opacity = '0';
+    
+    // Use setTimeout to ensure the transition happens
+    setTimeout(() => {
+      if (currentExplanationType === 'simple') {
+        currentExplanationType = 'technical';
+        const formattedExplanation = formatExplanation(currentTechnicalExplanation);
+        explanation.innerHTML = formattedExplanation;
+        
+        // Update button text and style with responsive design in mind
+        const btnTextElement = toggleExplanationBtn.querySelector('.btn-text');
+        if (btnTextElement) {
+          btnTextElement.textContent = 'Switch to Simple';
+        } else {
+          toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Simple</span>';
+        }
+        
+        toggleExplanationBtn.classList.remove('btn-primary');
+        toggleExplanationBtn.classList.add('btn-secondary');
+        toggleExplanationBtn.setAttribute('title', 'Switch to simple explanation');
+      } else {
+        currentExplanationType = 'simple';
+        const formattedExplanation = formatExplanation(currentSimpleExplanation);
+        explanation.innerHTML = formattedExplanation;
+        
+        // Update button text and style with responsive design in mind
+        const btnTextElement = toggleExplanationBtn.querySelector('.btn-text');
+        if (btnTextElement) {
+          btnTextElement.textContent = 'Switch to Technical';
+        } else {
+          toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Technical</span>';
+        }
+        
+        toggleExplanationBtn.classList.remove('btn-secondary');
+        toggleExplanationBtn.classList.add('btn-primary');
+        toggleExplanationBtn.setAttribute('title', 'Switch to technical explanation');
+      }
+      
+      // Apply syntax highlighting if highlight.js is available
+      if (typeof hljs !== 'undefined' && explanation) {
+        explanation.querySelectorAll('pre code').forEach((block) => {
+          hljs.highlightElement(block);
+        });
+      }
+      
+      // Restore opacity to show the content
+      setTimeout(() => {
+        explanation.style.opacity = '1';
+      }, 50);
+      
+      // Scroll to top of explanation on small screens
+      if (window.innerWidth <= 640) {
+        explanation.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
   }
   
   // Voice input handler
@@ -492,22 +527,32 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         console.error('Explanation element not found in DOM');
       }
-      
-      // Show toggle button if we have both explanations
+        // Show toggle button if we have both explanations with responsive design in mind
       const toggleExplanationBtn = document.getElementById('toggle-explanation-btn');
       if (currentSimpleExplanation && currentTechnicalExplanation && toggleExplanationBtn) {
         toggleExplanationBtn.style.display = 'inline-flex';
         
         // Set the correct button text based on which explanation is currently shown
         if (currentExplanationType === 'simple') {
-          toggleExplanationBtn.textContent = 'Switch to Technical Explanation';
+          // Set responsive button text
+          if (window.innerWidth <= 480) {
+            toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Technical</span>';
+          } else {
+            toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Technical Explanation</span>';
+          }
           toggleExplanationBtn.classList.remove('btn-secondary');
           toggleExplanationBtn.classList.add('btn-primary');
         } else {
-          toggleExplanationBtn.textContent = 'Switch to Simple Explanation';
+          // Set responsive button text
+          if (window.innerWidth <= 480) {
+            toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Simple</span>';
+          } else {
+            toggleExplanationBtn.innerHTML = '<i class="bx bx-refresh"></i> <span class="btn-text">Switch to Simple Explanation</span>';
+          }
           toggleExplanationBtn.classList.remove('btn-primary');
           toggleExplanationBtn.classList.add('btn-secondary');
-        }      }
+        }
+      }
       
       // Apply syntax highlighting if highlight.js is available
       if (typeof hljs !== 'undefined' && explanation) {
@@ -586,39 +631,245 @@ ${responsePreview}`;
       resetVoiceInput();
     }
   }
-  
-  // Show error message
+    // Show enhanced error message with responsive design
   function showError(message) {
-    errorText.textContent = message;
+    // Check if the error is about course relevance
+    const isRelevanceError = message.includes("doesn't seem to be related to");
+    
+    // Create and configure error message with improved styling
+    errorText.innerHTML = ''; // Clear previous content
+    
+    // Add icon
+    const errorIcon = document.createElement('i');
+    errorIcon.className = 'bx bx-error-circle error-icon';
+    errorText.appendChild(errorIcon);
+    
+    // Add message container for better layout
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'error-message-container';
+    
+    // Split the message for better formatting if it's a relevance error
+    if (isRelevanceError) {
+      const parts = message.split('Please try:');
+      
+      // Main error message
+      const mainError = document.createElement('div');
+      mainError.className = 'error-main';
+      mainError.textContent = parts[0].trim();
+      messageContainer.appendChild(mainError);
+      
+      if (parts.length > 1) {
+        // Suggestions section
+        const suggestions = document.createElement('div');
+        suggestions.className = 'error-suggestions';
+        
+        const suggestionsTitle = document.createElement('strong');
+        suggestionsTitle.textContent = 'Please try:';
+        suggestions.appendChild(suggestionsTitle);
+        
+        // Convert suggestions to a bulleted list for better readability
+        const suggestionsList = parts[1].split('-').filter(item => item.trim());
+        if (suggestionsList.length > 0) {
+          const ul = document.createElement('ul');
+          ul.className = 'suggestions-list';
+          
+          suggestionsList.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item.trim();
+            ul.appendChild(li);
+          });
+          
+          suggestions.appendChild(ul);
+        } else {
+          suggestions.appendChild(document.createTextNode(' ' + parts[1].trim()));
+        }
+        
+        messageContainer.appendChild(suggestions);
+      }
+    } else {
+      // Regular error message
+      messageContainer.textContent = message;
+    }
+    
+    errorText.appendChild(messageContainer);
+    
+    // For relevance errors, also highlight the course dropdown
+    if (isRelevanceError) {
+      courseSelect.classList.add('error-highlight');
+      // Remove the highlight after the user changes the selection
+      courseSelect.addEventListener('change', () => {
+        courseSelect.classList.remove('error-highlight');
+      }, { once: true });
+    }
+    
+    // Show the error container
     errorDiv.classList.remove('hidden');
+    
+    // Scroll to error on mobile
+    if (window.innerWidth <= 640) {
+      errorDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
-  
-  // Show notification
+    // Show enhanced notification with mobile-friendly styling
   function showNotification(message, isError = false) {
     // Create notification element
     const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 p-3 rounded-lg shadow-lg flex items-center gap-2 transition-opacity duration-300 ${
-      isError ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-    }`;
+    
+    // Position notification differently based on screen size
+    const isMobile = window.innerWidth <= 640;
+    let notificationClass = `notification ${isError ? 'error' : 'success'}`;
+    
+    if (isMobile) {
+      // On mobile, show at bottom center
+      notificationClass += ' notification-mobile';
+    } else {
+      // On desktop, show at top right corner
+      notificationClass += ' notification-desktop';
+    }
+    
+    notification.className = notificationClass;
+    
+    // Create inner container for better styling
+    const container = document.createElement('div');
+    container.className = 'notification-container';
     
     // Add icon
     const icon = document.createElement('i');
-    icon.className = `bx ${isError ? 'bx-error' : 'bx-check'}`;
-    notification.appendChild(icon);
+    icon.className = `bx ${isError ? 'bx-error-circle' : 'bx-check-circle'}`;
+    container.appendChild(icon);
     
-    // Add message
-    const text = document.createElement('span');
-    text.textContent = message;
-    notification.appendChild(text);
+    // Add text content
+    const textContent = document.createElement('span');
+    textContent.textContent = message;
+    textContent.className = 'notification-text';
+    container.appendChild(textContent);
+    
+    // Add close button for extended messages
+    if (message.length > 50) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'notification-close';
+      closeBtn.innerHTML = '<i class="bx bx-x"></i>';
+      closeBtn.addEventListener('click', () => {
+        notification.classList.add('notification-hiding');
+        setTimeout(() => notification.remove(), 300);
+      });
+      container.appendChild(closeBtn);
+    }
+    
+    // Add container to notification
+    notification.appendChild(container);
     
     // Add to document
     document.body.appendChild(notification);
     
-    // Remove after 3 seconds
+    // Apply animation class after a brief delay for the entrance animation
     setTimeout(() => {
-      notification.style.opacity = '0';
+      notification.classList.add('notification-visible');
+    }, 10);
+    
+    // Remove after an appropriate duration
+    const duration = Math.min(Math.max(message.length * 60, 3000), 8000);
+    
+    setTimeout(() => {
+      notification.classList.add('notification-hiding');
       setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    }, duration);
+    
+    // Add styles if not already added
+    if (!document.getElementById('notification-styles')) {
+      const style = document.createElement('style');
+      style.id = 'notification-styles';
+      style.textContent = `
+        .notification {
+          position: fixed;
+          padding: 0.75rem 1rem;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          color: white;
+          max-width: 90%;
+          z-index: 9999;
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        
+        .notification-container {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        
+        .notification-desktop {
+          top: 1rem;
+          right: 1rem;
+        }
+        
+        .notification-mobile {
+          bottom: 1rem;
+          left: 50%;
+          transform: translateX(-50%) translateY(20px);
+        }
+        
+        .notification.success {
+          background-color: var(--primary-color);
+        }
+        
+        .notification.error {
+          background-color: var(--danger);
+        }
+        
+        .notification-visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        
+        .notification-mobile.notification-visible {
+          transform: translateX(-50%) translateY(0);
+        }
+        
+        .notification-hiding {
+          opacity: 0;
+        }
+        
+        .notification-text {
+          flex: 1;
+        }
+        
+        .notification-close {
+          background: none;
+          border: none;
+          color: white;
+          opacity: 0.7;
+          cursor: pointer;
+          padding: 0.25rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: opacity 0.2s;
+        }
+        
+        .notification-close:hover {
+          opacity: 1;
+        }
+        
+        @media (prefers-reduced-motion) {
+          .notification {
+            transition: opacity 0.1s;
+            transform: none;
+          }
+          
+          .notification-mobile {
+            transform: translateX(-50%);
+          }
+          
+          .notification-mobile.notification-visible {
+            transform: translateX(-50%);
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
   }
   
   // Render the quiz questions
@@ -893,25 +1144,35 @@ ${responsePreview}`;
       console.log(`Loaded ${voices.length} voices for speech synthesis`);
     });
   }
-
-  // Format explanation text to convert markdown-style syntax to HTML
+  // Format explanation text to convert markdown-style syntax to HTML with improved mobile support
   function formatExplanation(text) {
     if (!text) return '';
     
-    // Process code blocks with language specification
+    // Process code blocks with language specification and mobile scroll indicators
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, language, code) {
       const lang = language ? `language-${language}` : '';
-      return `<pre class="bg-gray-100 p-3 rounded-md overflow-x-auto"><code class="${lang}">${code.trim()}</code></pre>`;
+      return `<div class="code-wrapper">
+        <div class="code-header">
+          <span class="code-language">${language || 'code'}</span>
+          <button class="code-copy-btn" title="Copy code">
+            <i class='bx bx-copy'></i>
+          </button>
+        </div>
+        <pre class="bg-gray-100 p-3 rounded-md overflow-x-auto"><code class="${lang}">${code.trim()}</code></pre>
+        <div class="mobile-scroll-indicator">
+          <span><i class='bx bx-chevrons-right'></i> scroll <i class='bx bx-chevrons-left'></i></span>
+        </div>
+      </div>`;
     });
     
-    // Convert ### headings to h3
-    text = text.replace(/### (.+)$/gm, '<h3 class="text-xl font-bold mt-5 mb-2">$1</h3>');
+    // Convert ### headings to h3 with responsive text size classes
+    text = text.replace(/### (.+)$/gm, '<h3 class="responsive-heading-3">$1</h3>');
     
-    // Convert ## headings to h2
-    text = text.replace(/## (.+)$/gm, '<h2 class="text-2xl font-bold mt-6 mb-3">$1</h2>');
+    // Convert ## headings to h2 with responsive text size classes
+    text = text.replace(/## (.+)$/gm, '<h2 class="responsive-heading-2">$1</h2>');
     
-    // Convert # headings to h1
-    text = text.replace(/# (.+)$/gm, '<h1 class="text-3xl font-bold mt-6 mb-4">$1</h1>');
+    // Convert # headings to h1 with responsive text size classes
+    text = text.replace(/# (.+)$/gm, '<h1 class="responsive-heading-1">$1</h1>');
     
     // Convert **text** to bold
     text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -919,29 +1180,350 @@ ${responsePreview}`;
     // Convert *text* or _text_ to italic
     text = text.replace(/(\*|_)(.+?)\1/g, '<em>$2</em>');
     
-    // Convert `code` to inline code
-    text = text.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>');
+    // Convert `code` to inline code with copy functionality on mobile
+    text = text.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
     
-    // Convert numbered lists
-    text = text.replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-5 list-decimal">$1</li>');
+    // Convert numbered lists with better mobile indentation
+    text = text.replace(/^\d+\.\s+(.+)$/gm, '<li class="responsive-list-item numbered">$1</li>');
     
-    // Convert bullet lists
-    text = text.replace(/^-\s+(.+)$/gm, '<li class="ml-5 list-disc">$1</li>');
+    // Convert bullet lists with better mobile indentation
+    text = text.replace(/^-\s+(.+)$/gm, '<li class="responsive-list-item bulleted">$1</li>');
     
     // Wrap adjacent list items in ul/ol tags
-    text = text.replace(/<li class="ml-5 list-disc">(.+?)<\/li>(\s*<li class="ml-5 list-disc">(.+?)<\/li>)+/g, 
-      '<ul class="my-3">$&</ul>');
-    text = text.replace(/<li class="ml-5 list-decimal">(.+?)<\/li>(\s*<li class="ml-5 list-decimal">(.+?)<\/li>)+/g, 
-      '<ol class="my-3">$&</ol>');
+    text = text.replace(/<li class="responsive-list-item bulleted">(.+?)<\/li>(\s*<li class="responsive-list-item bulleted">(.+?)<\/li>)+/g, 
+      '<ul class="responsive-list">$&</ul>');
+    text = text.replace(/<li class="responsive-list-item numbered">(.+?)<\/li>(\s*<li class="responsive-list-item numbered">(.+?)<\/li>)+/g, 
+      '<ol class="responsive-list">$&</ol>');
+    
+    // Handle tables for responsive display
+    // Replace markdown tables with responsive HTML tables
+    text = text.replace(/\|(.+?)\|(\s*\n\s*)\|([\s-]+)\|(\s*\n\s*)((?:\|.+?\|\s*\n\s*)+)/gm, function(match, header, nl1, separator, nl2, body) {
+      const headers = header.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+      const bodyRows = body.trim().split('\n');
+      
+      let tableHtml = '<div class="table-responsive"><table class="markdown-table">';
+      
+      // Add header row
+      tableHtml += '<thead><tr>';
+      headers.forEach(header => {
+        tableHtml += `<th>${header}</th>`;
+      });
+      tableHtml += '</tr></thead>';
+      
+      // Add body rows
+      tableHtml += '<tbody>';
+      bodyRows.forEach(row => {
+        const cells = row.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+        tableHtml += '<tr>';
+        cells.forEach(cell => {
+          tableHtml += `<td>${cell}</td>`;
+        });
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table></div>';
+      
+      return tableHtml;
+    });
+    
+    // Convert blockquotes
+    text = text.replace(/^>\s+(.+)$/gm, '<blockquote class="responsive-blockquote">$1</blockquote>');
     
     // Convert paragraphs (double line breaks)
-    text = text.replace(/\n\n/g, '</p><p class="my-3">');
+    text = text.replace(/\n\n/g, '</p><p class="responsive-paragraph">');
     
     // Wrap everything in a paragraph if not already
     if (!text.startsWith('<')) {
-      text = `<p class="my-3">${text}</p>`;
+      text = `<p class="responsive-paragraph">${text}</p>`;
     }
     
+    // Add event listeners for code copy buttons after the DOM is updated
+    setTimeout(() => {
+      document.querySelectorAll('.code-copy-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const codeBlock = e.target.closest('.code-wrapper').querySelector('code');
+          navigator.clipboard.writeText(codeBlock.textContent)
+            .then(() => {
+              // Show success feedback
+              const originalIcon = button.innerHTML;
+              button.innerHTML = '<i class="bx bx-check" style="color: var(--success);"></i>';
+              setTimeout(() => {
+                button.innerHTML = originalIcon;
+              }, 2000);
+            })
+            .catch(err => console.error('Failed to copy code: ', err));
+        });
+      });
+    }, 100);
+    
     return text;
+  }
+
+  // Handle responsive UI for different screen sizes
+  function updateResponsiveUI() {
+    const toggleExplanationBtn = document.getElementById('toggle-explanation-btn');
+    
+    if (toggleExplanationBtn) {
+      // Update button text based on screen size
+      const btnTextElement = toggleExplanationBtn.querySelector('.btn-text');
+      
+      if (btnTextElement) {
+        if (window.innerWidth <= 480) {
+          // For very small screens, use shorter text
+          if (currentExplanationType === 'simple') {
+            btnTextElement.textContent = 'Switch to Technical';
+          } else {
+            btnTextElement.textContent = 'Switch to Simple';
+          }
+        } else {
+          // For larger screens, use full text
+          if (currentExplanationType === 'simple') {
+            btnTextElement.textContent = 'Switch to Technical Explanation';
+          } else {
+            btnTextElement.textContent = 'Switch to Simple Explanation';
+          }
+        }
+      }
+    }
+    
+    // Update code block scroll indicators
+    const codeBlocks = document.querySelectorAll('.explanation-content pre');
+    codeBlocks.forEach(block => {
+      const scrollIndicator = block.parentElement?.querySelector('.mobile-scroll-indicator');
+      if (scrollIndicator) {
+        if (window.innerWidth <= 640 && block.scrollWidth > block.clientWidth) {
+          scrollIndicator.style.display = 'flex';
+        } else {
+          scrollIndicator.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  // Listen for window resize events to update UI
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    // Debounce resize events
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(updateResponsiveUI, 250);
+  });
+  
+  // Initialize responsive UI on page load
+  document.addEventListener('DOMContentLoaded', updateResponsiveUI);
+
+  // Handle device orientation changes on mobile
+  window.addEventListener('orientationchange', () => {
+    // Force a UI update after orientation change is complete
+    setTimeout(() => {
+      updateResponsiveUI();
+      
+      // Check if we need to render code syntax highlighting again
+      if (typeof hljs !== 'undefined' && explanation) {
+        explanation.querySelectorAll('pre code').forEach((block) => {
+          hljs.highlightElement(block);
+        });
+      }
+      
+      // Update any open modals/dropdowns position
+      if (!exportDropdown.classList.contains('hidden')) {
+        // Position dropdown correctly after orientation change
+        const btnRect = exportBtn.getBoundingClientRect();
+        exportDropdown.style.top = `${btnRect.bottom + window.scrollY}px`;
+        exportDropdown.style.right = `${window.innerWidth - btnRect.right}px`;
+      }
+    }, 300); // Wait for the orientation change to complete
+  });
+  
+  // Add touchstart listeners for mobile devices to enhance touch feedback
+  document.addEventListener('DOMContentLoaded', () => {
+    const addTouchFeedback = () => {
+      const touchElements = document.querySelectorAll('.btn, .resource-card, .quiz-option, .social-link');
+      
+      touchElements.forEach(el => {
+        el.addEventListener('touchstart', () => {
+          el.classList.add('touch-active');
+        }, { passive: true });
+        
+        el.addEventListener('touchend', () => {
+          el.classList.remove('touch-active');
+        }, { passive: true });
+        
+        el.addEventListener('touchcancel', () => {
+          el.classList.remove('touch-active');
+        }, { passive: true });
+      });
+    };
+    
+    // Initial setup
+    addTouchFeedback();
+    
+    // Re-add listeners when content changes (for dynamically added elements)
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.addedNodes.length > 0) {
+          addTouchFeedback();
+        }
+      });
+    });
+    
+    // Start observing
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+
+  // Function to test responsiveness (development only)
+  function testResponsiveness() {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    console.log(`%cResponsiveness Test`, 'font-size: 16px; font-weight: bold; color: #5cb85c;');
+    console.log(`Viewport Size: ${viewportWidth}px × ${viewportHeight}px`);
+    
+    // Check viewport category
+    let deviceCategory = 'Unknown';
+    if (viewportWidth <= 480) deviceCategory = 'Small Mobile';
+    else if (viewportWidth <= 640) deviceCategory = 'Mobile';
+    else if (viewportWidth <= 768) deviceCategory = 'Large Mobile/Small Tablet';
+    else if (viewportWidth <= 1024) deviceCategory = 'Tablet';
+    else if (viewportWidth <= 1440) deviceCategory = 'Laptop/Desktop';
+    else deviceCategory = 'Large Desktop';
+    
+    console.log(`Device Category: ${deviceCategory}`);
+    
+    // Test overflow issues
+    const overflowElements = Array.from(document.querySelectorAll('*')).filter(
+      el => el.offsetWidth > viewportWidth
+    );
+    
+    if (overflowElements.length > 0) {
+      console.warn(`%cFound ${overflowElements.length} elements causing horizontal overflow:`, 'color: orange; font-weight: bold;');
+      overflowElements.forEach(el => {
+        console.warn(`Element ${el.tagName}${el.id ? '#'+el.id : ''}${el.className ? '.'+el.className.replace(/ /g, '.') : ''} overflows by ${el.offsetWidth - viewportWidth}px`);
+      });
+    } else {
+      console.log(`%c✓ No horizontal overflow detected`, 'color: green;');
+    }
+    
+    // Check for touch features
+    console.log(`Touch Support: ${('ontouchstart' in window) ? 'Yes' : 'No'}`);
+    
+    // Check for other responsive features
+    const cssVars = getComputedStyle(document.documentElement);
+    const primaryColor = cssVars.getPropertyValue('--primary-color');
+    
+    console.log(`Loaded CSS Variables: ${primaryColor ? '✓' : '✗'}`);
+    console.log(`Responsive Media Queries Active: ${
+      window.matchMedia('(max-width: 640px)').matches ? 'Mobile' : 
+      window.matchMedia('(max-width: 1024px)').matches ? 'Tablet' : 'Desktop'
+    }`);
+    
+    // For development testing only - remove in production
+    if (localStorage.getItem('devMode') === 'true') {
+      // Add viewport size display
+      let sizeIndicator = document.getElementById('viewport-size-indicator');
+      if (!sizeIndicator) {
+        sizeIndicator = document.createElement('div');
+        sizeIndicator.id = 'viewport-size-indicator';
+        sizeIndicator.style.position = 'fixed';
+        sizeIndicator.style.bottom = '10px';
+        sizeIndicator.style.left = '10px';
+        sizeIndicator.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        sizeIndicator.style.color = 'white';
+        sizeIndicator.style.padding = '5px 10px';
+        sizeIndicator.style.borderRadius = '4px';
+        sizeIndicator.style.fontSize = '12px';
+        sizeIndicator.style.zIndex = '9999';
+        document.body.appendChild(sizeIndicator);
+      }
+      
+      function updateSizeIndicator() {
+        sizeIndicator.textContent = `${window.innerWidth}×${window.innerHeight}px`;
+      }
+      
+      updateSizeIndicator();
+      window.addEventListener('resize', updateSizeIndicator);
+    }
+  }
+  
+  // Run responsiveness test in development environments only
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    window.addEventListener('load', testResponsiveness);
+    window.addEventListener('resize', () => {
+      clearTimeout(window.resizeTestTimer);
+      window.resizeTestTimer = setTimeout(testResponsiveness, 500);
+    });
+  }
+});
+
+// Mobile swipe gesture support for explanation content
+function enableSwipeGestures() {
+  const explanationContent = document.getElementById('explanation');
+  if (!explanationContent) return;
+  
+  let touchStartX = 0;
+  let touchEndX = 0;
+  let touchStartY = 0;
+  let touchEndY = 0;
+  
+  // Minimum distance to be considered a swipe
+  const minSwipeDistance = 100;
+  // Maximum vertical deviation allowed for horizontal swipe
+  const maxVerticalDeviation = 50;
+  
+  explanationContent.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  }, { passive: true });
+  
+  explanationContent.addEventListener('touchend', (e) => {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    
+    const horizontalDistance = Math.abs(touchEndX - touchStartX);
+    const verticalDistance = Math.abs(touchEndY - touchStartY);
+    
+    // Only consider it a horizontal swipe if vertical movement is limited
+    if (horizontalDistance > minSwipeDistance && verticalDistance < maxVerticalDeviation) {
+      // Left to right swipe
+      if (touchEndX > touchStartX) {
+        // If we're showing technical explanation, switch to simple
+        if (currentExplanationType === 'technical' && 
+            currentSimpleExplanation && 
+            currentTechnicalExplanation) {
+          toggleExplanationType();
+          showNotification('Switched to simple explanation');
+        }
+      }
+      // Right to left swipe
+      else if (touchStartX > touchEndX) {
+        // If we're showing simple explanation, switch to technical
+        if (currentExplanationType === 'simple' && 
+            currentSimpleExplanation && 
+            currentTechnicalExplanation) {
+          toggleExplanationType();
+          showNotification('Switched to technical explanation');
+        }
+      }
+    }
+  }, { passive: true });
+}
+
+// Initialize swipe gestures when the explanation loads
+document.addEventListener('DOMContentLoaded', () => {
+  // Enable swipe gestures on touch devices
+  if ('ontouchstart' in window) {
+    enableSwipeGestures();
+    
+    // Re-initialize when content is updated
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.target.id === 'explanation') {
+          enableSwipeGestures();
+        }
+      });
+    });
+    
+    const explanationContent = document.getElementById('explanation');
+    if (explanationContent) {
+      observer.observe(explanationContent, { childList: true });
+    }
   }
 });
