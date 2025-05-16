@@ -456,8 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timestamp: new Date().toISOString(),
         prompt: `${explanationLevel === 'simple' ? 'Explain like I\'m 5: ' : 'Technical explanation: '}"${question}" related to ${course}`
       };
-      
-      // Make API request
+        // Make API request
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -466,7 +465,29 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch response');
+          // Handle relevance error specifically
+        if (errorData.isRelevanceError) {
+          // Show a more helpful error message with course suggestion
+          showError(`${errorData.error} 
+          
+          Your question about "${question}" doesn't seem to be related to ${course}. 
+          
+          Please try:
+          1. Rewording your question to be more specific to ${course}
+          2. Selecting a different course that matches your question topic
+          3. Checking the list of available topics in the course dropdown`);
+          
+          // Highlight the course selector to indicate it may need to be changed
+          courseSelect.classList.add('error-highlight');
+          
+          // Remove highlight after a delay
+          setTimeout(() => {
+            courseSelect.classList.remove('error-highlight');
+          }, 3000);
+        } else {
+          throw new Error(errorData.error || 'Failed to fetch response');
+        }
+        return; // Exit early
       }
       
       const data = await response.json();
@@ -586,11 +607,20 @@ ${responsePreview}`;
       resetVoiceInput();
     }
   }
-  
-  // Show error message
+    // Show error message
   function showError(message) {
-    errorText.textContent = message;
+    // Format message for HTML display
+    const formattedMessage = message
+      .split('\n')
+      .filter(line => line.trim() !== '') // Remove empty lines
+      .map(line => `<p class="mb-2">${line.trim()}</p>`)
+      .join('');
+    
+    errorText.innerHTML = formattedMessage;
     errorDiv.classList.remove('hidden');
+    
+    // Scroll to error message
+    errorDiv.scrollIntoView({ behavior: 'smooth' });
   }
   
   // Show notification

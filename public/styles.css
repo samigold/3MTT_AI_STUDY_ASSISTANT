@@ -155,6 +155,19 @@ body::before {
   outline: none;
 }
 
+/* Error highlight for form elements */
+.error-highlight {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+  animation: pulse-error 2s infinite;
+}
+
+@keyframes pulse-error {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
 /* Button styles */
 .btn {
   display: inline-flex;
@@ -395,14 +408,30 @@ body::before {
 .error-message {
   background-color: #fee2e2;
   color: var(--danger);
-  padding: 1rem;
+  padding: 1.5rem;
   border-radius: 8px;
-  text-align: center;
+  text-align: left;
   font-weight: 500;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  border-left: 4px solid var(--danger);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.error-message i {
+  font-size: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.error-message p {
+  margin-bottom: 0.5rem;
+}
+
+.error-message p:first-child {
+  font-weight: 600;
+  color: #b91c1c;
 }
 
 /* Footer */

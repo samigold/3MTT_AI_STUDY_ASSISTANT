@@ -5,11 +5,97 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
 
+// Define course topics and relevant keywords for validation
+const courseTopics = {
+  "Frontend": [
+    "HTML", "CSS", "JavaScript", "React", "Vue", "Angular", "DOM", "responsive design", 
+    "web design", "UI", "Bootstrap", "Tailwind", "SASS", "LESS", "webpack", "Babel",
+    "jQuery", "TypeScript", "frontend", "web development", "flexbox", "grid", "animations"
+  ],
+  "Backend": [
+    "Node.js", "Express", "Django", "Flask", "Ruby on Rails", "PHP", "Laravel", "API", 
+    "REST", "GraphQL", "database", "SQL", "NoSQL", "MongoDB", "PostgreSQL", "MySQL",
+    "authentication", "authorization", "backend", "server", "middleware", "microservices"
+  ],
+  "Product": [
+    "product management", "user story", "roadmap", "MVP", "agile", "scrum", "kanban", 
+    "user research", "market research", "A/B testing", "product strategy", "user feedback",
+    "customer development", "product lifecycle", "feature prioritization", "stakeholder"
+  ],
+  "UI/UX": [
+    "user experience", "user interface", "wireframe", "mockup", "prototype", "usability",
+    "accessibility", "UI/UX", "design thinking", "user testing", "Figma", "Sketch", "Adobe XD",
+    "user research", "information architecture", "interaction design", "visual design"
+  ],
+  "Data Science": [
+    "Python", "R", "statistics", "machine learning", "AI", "data visualization", "pandas",
+    "NumPy", "data mining", "big data", "data analysis", "Jupyter", "TensorFlow", "PyTorch",
+    "regression", "classification", "clustering", "neural networks", "deep learning"
+  ],
+  "Cybersecurity": [
+    "security", "encryption", "network security", "penetration testing", "vulnerability",
+    "firewall", "malware", "phishing", "authentication", "authorization", "cryptography",
+    "ethical hacking", "OWASP", "security audit", "threat modeling", "intrusion detection"
+  ],
+  "Cloud Computing": [
+    "AWS", "Azure", "Google Cloud", "cloud services", "serverless", "IaaS", "PaaS", "SaaS",
+    "containers", "Docker", "Kubernetes", "virtualization", "cloud architecture", "Lambda",
+    "scalability", "load balancing", "cloud security", "cloud migration", "cloud storage"
+  ],
+  "DevOps": [
+    "CI/CD", "continuous integration", "continuous deployment", "Jenkins", "GitHub Actions",
+    "infrastructure as code", "Terraform", "Ansible", "monitoring", "logging", "Docker",
+    "Kubernetes", "automation", "DevOps", "GitOps", "SRE", "site reliability"
+  ]
+};
+
+// Function to check if a question is relevant to the selected course
+function isQuestionRelevantToCourse(question, course) {
+  // If the course doesn't exist in our topics, we can't validate
+  if (!courseTopics[course]) {
+    return true; // Allow by default if we can't validate
+  }
+  
+  // Convert question to lowercase for case-insensitive matching
+  const lowerQuestion = question.toLowerCase();
+  const keywords = courseTopics[course].map(keyword => keyword.toLowerCase());
+  
+  // Check if any keyword from the course is in the question
+  for (const keyword of keywords) {
+    if (lowerQuestion.includes(keyword.toLowerCase())) {
+      return true;
+    }
+  }
+  
+  // If no direct match, use a more sophisticated approach with word stemming
+  // This is a basic implementation - could be improved with NLP libraries
+  const questionWords = lowerQuestion.split(/\W+/).filter(word => word.length > 3);
+  for (const keyword of keywords) {
+    const keywordStem = keyword.toLowerCase().substring(0, 4); // Simple stemming
+    for (const word of questionWords) {
+      if (word.startsWith(keywordStem)) {
+        return true;
+      }
+    }
+  }
+  
+  // No match found
+  return false;
+}
+
 const getResult = async (req, res) => {
     const { course, question, explanationLevel } = req.body;
 
     if (!course || !question) {
       return res.status(400).json({ error: 'Course and question are required.' });
+    }
+    
+    // Validate if the question is relevant to the selected course
+    if (!isQuestionRelevantToCourse(question, course)) {
+      return res.status(400).json({ 
+        error: 'Your question does not appear to be related to the selected course. Please ask a question relevant to the course materials or select a different course.',
+        isRelevanceError: true
+      });
     }
   
     try {      let explanationPrompt = "";
