@@ -1,12 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize syntax highlighting if highlight.js is available
+  if (typeof hljs !== 'undefined') {
+    hljs.configure({
+      ignoreUnescapedHTML: true,
+      languages: ['javascript', 'html', 'css', 'python', 'java', 'json', 'bash', 'typescript']
+    });
+  }
+  
   // Form elements
   const form = document.getElementById('ask-form');
   const courseSelect = document.getElementById('course');
   const questionInput = document.getElementById('question');
   const explanationLevelInput = document.getElementById('explanationLevel');
   const showAiLogsCheckbox = document.getElementById('show-ai-logs');
-  
-  // UI components
+    // UI components
   const loading = document.getElementById('loading');
   const responseDiv = document.getElementById('response');
   const explanation = document.getElementById('explanation');
@@ -26,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiLogContainer = document.getElementById('ai-log-container');
   const aiLogContent = document.getElementById('ai-log-content');
   const toggleLogSizeBtn = document.getElementById('toggle-log-size');
+  const toggleExplanationBtn = document.getElementById('toggle-explanation-btn');
   const copyExplanationBtn = document.getElementById('copy-explanation');
   const exportBtn = document.getElementById('export-btn');
   const exportDropdown = document.getElementById('export-dropdown');
@@ -61,6 +69,50 @@ document.addEventListener('DOMContentLoaded', () => {
   let questionsData = [];
   let currentRequestData = {};
   let currentResponseData = {};
+    // Store both explanations for toggling
+  let currentSimpleExplanation = '';
+  let currentTechnicalExplanation = '';
+  let currentExplanationType = 'simple';
+  
+  // Function to toggle between simple and technical explanations
+  function toggleExplanationType() {
+    if (!currentSimpleExplanation || !currentTechnicalExplanation) {
+      showNotification('Both explanation types are not available', true);
+      return; // Do nothing if we don't have both explanations
+    }
+    
+    // Check if button exists (using the existing variable from outer scope)
+    if (!toggleExplanationBtn) return;
+    
+    // Check if explanation element exists
+    if (!explanation) {
+      console.error('Explanation element not found');
+      showNotification('Cannot toggle explanation - element not found', true);
+      return;
+    }
+    
+    if (currentExplanationType === 'simple') {
+      currentExplanationType = 'technical';
+      const formattedExplanation = formatExplanation(currentTechnicalExplanation);
+      explanation.innerHTML = formattedExplanation;
+      toggleExplanationBtn.textContent = 'Switch to Simple Explanation';
+      toggleExplanationBtn.classList.remove('btn-primary');
+      toggleExplanationBtn.classList.add('btn-secondary');
+    } else {
+      currentExplanationType = 'simple';
+      const formattedExplanation = formatExplanation(currentSimpleExplanation);
+      explanation.innerHTML = formattedExplanation;
+      toggleExplanationBtn.textContent = 'Switch to Technical Explanation';
+      toggleExplanationBtn.classList.remove('btn-secondary');
+      toggleExplanationBtn.classList.add('btn-primary');
+    }
+    // Apply syntax highlighting if highlight.js is available
+    if (typeof hljs !== 'undefined' && explanation) {
+      explanation.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+      });
+    }
+  }
   
   // Voice input handler
   if (voiceInputBtn && recognition) {
@@ -213,17 +265,17 @@ document.addEventListener('DOMContentLoaded', () => {
       exportDropdown.classList.add('hidden');
     }
   });
-  
-  // Copy explanation to clipboard
+    // Copy explanation to clipboard
   copyExplanationBtn.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(explanation.innerText);
+      // Get raw text without HTML tags for clipboard
+      const textContent = explanation.innerText || explanation.textContent;
+      await navigator.clipboard.writeText(textContent);
       showNotification('Copied to clipboard!');
     } catch (err) {
       showNotification('Failed to copy text', true);
     }
   });
-  
   // Export as PDF
   exportPdfBtn.addEventListener('click', () => {
     exportDropdown.classList.add('hidden');
@@ -232,17 +284,103 @@ document.addEventListener('DOMContentLoaded', () => {
     const doc = new jsPDF();
     
     const title = `3MTT Study Assistant - ${courseSelect.value}: ${questionInput.value}`;
-    const content = explanation.innerText;
+    // Use innerText to get text with line breaks preserved
+    const content = explanation.innerText || explanation.textContent;
     
-    doc.setFontSize(16);
-    doc.text(title, 20, 20);
-    
-    doc.setFontSize(12);
-    const splitText = doc.splitTextToSize(content, 170);
-    doc.text(splitText, 20, 30);
-    
-    doc.save(`3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.pdf`);
-    showNotification('PDF downloaded!');
+    // PDF generation with better formatting
+    try {
+      // Set document title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(0, 0, 0);
+      doc.text(title, 20, 20);
+      
+      // Process content by sections
+      const lines = content.split('\n');
+      let y = 35;  // Starting y position after title
+      
+      lines.forEach(line => {
+        // Skip empty lines but add some spacing
+        if (!line.trim()) {
+          y += 3;
+          return;
+        }
+        
+        // Handle headings
+        if (line.startsWith('# ')) {
+          y += 5; // Add spacing before heading
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(16);
+          doc.text(line.substring(2), 20, y);
+          y += 8;
+          return;
+        }
+        
+        if (line.startsWith('## ')) {
+          y += 4; // Add spacing before subheading
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.text(line.substring(3), 20, y);
+          y += 6;
+          return;
+        }
+        
+        if (line.startsWith('### ')) {
+          y += 3; // Add spacing before section title
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(13);
+          doc.text(line.substring(4), 20, y);
+          y += 5;
+          return;
+        }
+        
+        // Handle bullet points
+        if (line.trim().startsWith('- ')) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(12);
+          const bulletText = '• ' + line.substring(2);
+          const splitBullet = doc.splitTextToSize(bulletText, 170);
+          doc.text(splitBullet, 25, y); // Indent bullet points
+          y += 5 * splitBullet.length;
+          return;
+        }
+        
+        // Handle numbered lists (1. 2. etc)
+        if (/^\d+\.\s/.test(line.trim())) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(12);
+          const splitNumbered = doc.splitTextToSize(line, 165);
+          doc.text(splitNumbered, 25, y); // Indent numbered points
+          y += 5 * splitNumbered.length;
+          return;
+        }
+        
+        // Handle code blocks (simplified - just change font)
+        if (line.trim().startsWith('```') || line.trim() === '```') {
+          y += 3;
+          return;
+        }
+        
+        // Regular text
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        const splitText = doc.splitTextToSize(line, 170);
+        doc.text(splitText, 20, y);
+        y += 5 * splitText.length;
+        
+        // Add new page if we're near the bottom
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+      });
+      
+      doc.save(`3mtt-study-${courseSelect.value.toLowerCase()}-${Date.now()}.pdf`);
+      showNotification('PDF downloaded!');
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      showNotification('Error generating PDF', true);
+    }
   });
   
   // Export as Text
@@ -284,6 +422,11 @@ document.addEventListener('DOMContentLoaded', () => {
       aiLogContainer.classList.toggle('hidden', !showAiLogsCheckbox.checked);
     }
   });
+  
+  // Add event listener for the toggle explanation button
+  if (toggleExplanationBtn) {
+    toggleExplanationBtn.addEventListener('click', toggleExplanationType);
+  }
   
   // Form submission
   form.addEventListener('submit', async (event) => {
@@ -335,10 +478,43 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       
       // Update AI logs
-      updateAILogs();
+      updateAILogs();      // Store both explanations for toggle functionality
+      currentSimpleExplanation = data.simpleExplanation || '';
+      currentTechnicalExplanation = data.technicalExplanation || '';
+      currentExplanationType = explanationLevel;
       
-      // Update explanation
-      explanation.textContent = data.explanation || 'No explanation provided.';
+      // Format and display the selected explanation
+      const formattedExplanation = formatExplanation(data.explanation || 'No explanation provided.');
+      
+      // Check if explanation element exists before setting its innerHTML
+      if (explanation) {
+        explanation.innerHTML = formattedExplanation;
+      } else {
+        console.error('Explanation element not found in DOM');
+      }
+      
+      // Show toggle button if we have both explanations
+      const toggleExplanationBtn = document.getElementById('toggle-explanation-btn');
+      if (currentSimpleExplanation && currentTechnicalExplanation && toggleExplanationBtn) {
+        toggleExplanationBtn.style.display = 'inline-flex';
+        
+        // Set the correct button text based on which explanation is currently shown
+        if (currentExplanationType === 'simple') {
+          toggleExplanationBtn.textContent = 'Switch to Technical Explanation';
+          toggleExplanationBtn.classList.remove('btn-secondary');
+          toggleExplanationBtn.classList.add('btn-primary');
+        } else {
+          toggleExplanationBtn.textContent = 'Switch to Simple Explanation';
+          toggleExplanationBtn.classList.remove('btn-primary');
+          toggleExplanationBtn.classList.add('btn-secondary');
+        }      }
+      
+      // Apply syntax highlighting if highlight.js is available
+      if (typeof hljs !== 'undefined' && explanation) {
+        explanation.querySelectorAll('pre code').forEach((block) => {
+          hljs.highlightElement(block);
+        });
+      }
       
       // Update questions
       questionsData = data.questions || [];
@@ -716,5 +892,56 @@ ${responsePreview}`;
     loadVoices().then(voices => {
       console.log(`Loaded ${voices.length} voices for speech synthesis`);
     });
+  }
+
+  // Format explanation text to convert markdown-style syntax to HTML
+  function formatExplanation(text) {
+    if (!text) return '';
+    
+    // Process code blocks with language specification
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, language, code) {
+      const lang = language ? `language-${language}` : '';
+      return `<pre class="bg-gray-100 p-3 rounded-md overflow-x-auto"><code class="${lang}">${code.trim()}</code></pre>`;
+    });
+    
+    // Convert ### headings to h3
+    text = text.replace(/### (.+)$/gm, '<h3 class="text-xl font-bold mt-5 mb-2">$1</h3>');
+    
+    // Convert ## headings to h2
+    text = text.replace(/## (.+)$/gm, '<h2 class="text-2xl font-bold mt-6 mb-3">$1</h2>');
+    
+    // Convert # headings to h1
+    text = text.replace(/# (.+)$/gm, '<h1 class="text-3xl font-bold mt-6 mb-4">$1</h1>');
+    
+    // Convert **text** to bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert *text* or _text_ to italic
+    text = text.replace(/(\*|_)(.+?)\1/g, '<em>$2</em>');
+    
+    // Convert `code` to inline code
+    text = text.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>');
+    
+    // Convert numbered lists
+    text = text.replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-5 list-decimal">$1</li>');
+    
+    // Convert bullet lists
+    text = text.replace(/^-\s+(.+)$/gm, '<li class="ml-5 list-disc">$1</li>');
+    
+    // Wrap adjacent list items in ul/ol tags
+    text = text.replace(/<li class="ml-5 list-disc">(.+?)<\/li>(\s*<li class="ml-5 list-disc">(.+?)<\/li>)+/g, 
+      '<ul class="my-3">$&</ul>');
+    text = text.replace(/<li class="ml-5 list-decimal">(.+?)<\/li>(\s*<li class="ml-5 list-decimal">(.+?)<\/li>)+/g, 
+      '<ol class="my-3">$&</ol>');
+    
+    // Convert paragraphs (double line breaks)
+    text = text.replace(/\n\n/g, '</p><p class="my-3">');
+    
+    // Wrap everything in a paragraph if not already
+    if (!text.startsWith('<')) {
+      text = `<p class="my-3">${text}</p>`;
+    }
+    
+    return text;
   }
 });

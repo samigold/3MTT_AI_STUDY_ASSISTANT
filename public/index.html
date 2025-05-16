@@ -11,6 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Add boxicons for icons -->
   <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <!-- Add highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
   <!-- Add jsPDF for PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -95,12 +98,14 @@
       </div>
       
       <div id="response" class="hidden">
-        <div class="result-section">
-          <div class="flex items-center justify-between">
+        <div class="result-section">          <div class="flex items-center justify-between">
             <h2 class="result-title text-xl">
               <i class='bx bx-bulb'></i> Explanation
             </h2>
             <div class="btn-group">
+              <button id="toggle-explanation-btn" class="btn btn-primary mr-2" style="display: none;">
+                Switch to Technical Explanation
+              </button>
               <button id="text-to-speech-btn" class="btn btn-outline btn-icon" title="Listen to explanation">
                 <i class='bx bx-volume-full'></i>
               </button>
@@ -174,10 +179,16 @@
         <i class='bx bx-error-circle'></i>
         <span id="error-text">An error occurred. Please try again.</span>
       </div>
-    </div>
-    
-    <div class="footer">
-      <p>Powered by the <a href="https://3mtt.nitda.gov.ng/" target="_blank">3 Million Technical Talent</a> Programme</p>
+    </div>    <div class="footer">
+      <div class="footer-content">
+        <p>Powered by the <a href="https://3mtt.nitda.gov.ng/" target="_blank" rel="noopener" class="footer-link">3 Million Technical Talent</a> Programme</p>
+        <p class="footer-love">Built with <span class="heart">❤</span> by Samigold</p>
+        <div class="social-links">
+          <a href="https://github.com/samigold" target="_blank" rel="noopener" class="social-link" title="GitHub"><i class='bx bxl-github'></i></a>
+          <a href="https://linkedin.com/in/samigold" target="_blank" rel="noopener" class="social-link" title="LinkedIn"><i class='bx bxl-linkedin'></i></a>
+          <a href="https://twitter.com/samigold" target="_blank" rel="noopener" class="social-link" title="Twitter"><i class='bx bxl-twitter'></i></a>
+        </div>
+      </div>
     </div>
   </div>
   
