@@ -87,8 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
       
-      <!-- Game info section -->
-      <div id="game-info" class="game-section" style="display: none;">
+      <!-- Game info section -->      <div id="game-info" class="game-section" style="display: none;">
         <div class="game-id-display">
           <span>Game ID:</span>
           <span id="game-id-display" class="game-id-text" title="Click to copy"></span>
@@ -99,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="players-list" class="players-list">
           <h3>Players</h3>
           <div id="players-container"></div>
+          <button id="add-ai-player-btn" class="game-btn game-btn-secondary">Add AI Player</button>
         </div>
       </div>
       
@@ -117,15 +117,27 @@ document.addEventListener('DOMContentLoaded', () => {
               <input type="text" class="question-input" placeholder="Enter your question">
               <input type="text" class="answer-input" placeholder="Enter the answer">
             </div>
-          </div>          <button id="add-question-btn" class="game-btn game-btn-outline">Add Another Question</button>
-          <div class="question-type-toggle">
-            <label class="toggle-container">
-              <span>Multiple Choice</span>
-              <label class="switch">
-                <input type="checkbox" id="multiple-choice-toggle">
-                <span class="slider round"></span>
+          </div>          <button id="add-question-btn" class="game-btn game-btn-outline">Add Another Question</button>          <div class="question-controls">
+            <div class="question-type-toggle">
+              <label class="toggle-container">
+                <span>Multiple Choice</span>
+                <label class="switch">
+                  <input type="checkbox" id="multiple-choice-toggle">
+                  <span class="slider round"></span>
+                </label>
               </label>
-            </label>
+            </div>
+            
+            <div class="question-count-selector">
+              <label for="question-count">Number of Questions:</label>
+              <select id="question-count" class="question-count">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+              </select>
+            </div>
           </div>
           <button id="generate-ai-questions-btn" class="game-btn game-btn-secondary">Generate AI Questions</button>
           <button id="start-game-btn" class="game-btn">Start Game</button>
@@ -196,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const playersContainer = gameContainer.querySelector('#players-container');
   const timeLeft = gameContainer.querySelector('#time-left');
   const gameTimer = gameContainer.querySelector('#game-timer');
-    // Event listeners for game actions
+  // Event listeners for game actions
   createGameBtn.addEventListener('click', createGame);
   joinGameBtn.addEventListener('click', joinGame);
   copyGameIdBtn.addEventListener('click', copyGameId);
@@ -205,6 +217,12 @@ document.addEventListener('DOMContentLoaded', () => {
   generateAIQuestionsBtn.addEventListener('click', generateQuestions);
   startGameBtn.addEventListener('click', startGame);
   submitGuessBtn.addEventListener('click', submitGuess);
+  
+  // AI player button
+  const addAIPlayerBtn = gameContainer.querySelector('#add-ai-player-btn');
+  if (addAIPlayerBtn) {
+    addAIPlayerBtn.addEventListener('click', addAIPlayer);
+  }
   
   // Multiple choice toggle
   const multipleChoiceToggle = document.querySelector('#multiple-choice-toggle');
@@ -266,9 +284,39 @@ document.addEventListener('DOMContentLoaded', () => {
       gameIdInput.value = existingGameId;
     }
   }
-  
-  // Function to close game overlay
+    // Function to close game overlay
   function closeGameOverlay() {
+    // Clean up any game state
+    if (currentGameId) {
+      // Leave the current game room if connected
+      socket.emit('disconnect');
+    }
+    
+    // Reset UI states
+    gameSetupSection.style.display = 'block';
+    gameInfoSection.style.display = 'none';
+    gamePlayArea.style.display = 'none';
+    gameMasterControls.style.display = 'none';
+    playerGuessControls.style.display = 'none';
+    gameMessagesSection.style.display = 'none';
+    
+    // Clear game messages
+    if (gameMessages) {
+      gameMessages.innerHTML = '';
+    }
+    
+    // Reset game variables
+    currentGameId = null;
+    isGameMaster = false;
+    currentQuestion = null;
+    
+    // Reset any modal or popup that might be visible
+    const modals = document.querySelectorAll('.end-game-modal, .win-popup, .round-transition, .ai-hosting-notice');
+    modals.forEach(modal => {
+      if (modal) modal.remove();
+    });
+    
+    // Hide overlay
     gameOverlay.style.display = 'none';
     document.body.style.overflow = '';
   }
@@ -400,18 +448,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentTopic) {
       addGameMessage('Please enter a topic for your questions', 'wrong-answer');
       return;
-    }
-
-    // Check if multiple choice option is selected
+    }    // Check if multiple choice option is selected
     const isMultipleChoice = document.querySelector('#multiple-choice-toggle')?.checked || false;
     
-    addGameMessage(`Generating ${isMultipleChoice ? 'multiple-choice' : ''} questions about "${currentTopic}"...`, 'system-message');
+    // Get the selected question count
+    const questionCountSelect = document.getElementById('question-count');
+    const questionCount = questionCountSelect ? parseInt(questionCountSelect.value) : 5;
+    
+    addGameMessage(`Generating ${questionCount} ${isMultipleChoice ? 'multiple-choice' : ''} questions about "${currentTopic}"...`, 'system-message');
     generateAIQuestionsBtn.disabled = true;
     
     socket.emit('getAIQuestions', { 
       course: currentCourse, 
       topic: currentTopic,
-      isMultipleChoice: isMultipleChoice
+      isMultipleChoice: isMultipleChoice,
+      questionCount: questionCount
     });
   }
     // Start the game with the current questions
@@ -516,8 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gameMessages.appendChild(messageDiv);
     gameMessages.scrollTop = gameMessages.scrollHeight;
   }
-  
-  // Update players list
+    // Update players list
   function updatePlayersList(players) {
     playersContainer.innerHTML = '';
     
@@ -539,6 +589,13 @@ document.addEventListener('DOMContentLoaded', () => {
         nameSpan.appendChild(masterBadge);
       }
       
+      if (player.isAI) {
+        const aiBadge = document.createElement('span');
+        aiBadge.className = 'ai-player-indicator';
+        aiBadge.textContent = 'AI';
+        nameSpan.appendChild(aiBadge);
+      }
+      
       const scoreSpan = document.createElement('span');
       scoreSpan.className = 'player-score';
       scoreSpan.textContent = `${player.score} points`;
@@ -548,8 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
       playersContainer.appendChild(playerDiv);
     });
   }
-  
-  // Show copy feedback
+    // Show copy feedback
   function showCopyFeedback(message) {
     const feedback = document.createElement('div');
     feedback.className = 'copy-feedback';
@@ -559,6 +615,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       feedback.remove();
     }, 2000);
+  }
+  
+  // Add AI player to the game
+  function addAIPlayer() {
+    if (!currentGameId || !isGameMaster) {
+      addGameMessage('You need to be the game master to add an AI player', 'wrong-answer');
+      return;
+    }
+    
+    socket.emit('addAIPlayer', { gameId: currentGameId });
+    addGameMessage('Adding an AI player to the game...', 'system-message');
   }
   
   // Socket event handlers
@@ -750,17 +817,159 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('playerGuessed', ({ playerName: name, remainingAttempts }) => {
     addGameMessage(`${name} made a wrong guess (${remainingAttempts} attempts left)`, 'system-message');
   });
-  
-  socket.on('roundEnded', ({ winner, answer, scores }) => {
+  socket.on('roundEnded', ({ winner, answer, scores, currentRound, totalRounds }) => {
+    // Create and show the popup for round winner
+    const popup = document.createElement('div');
+    popup.className = 'win-popup';
+    popup.textContent = winner.id === socket.id ? 
+        '🎉 You won this round!' : 
+        `🎉 ${winner.name} won this round!`;
+    document.body.appendChild(popup);
+
+    // Remove popup after animation
+    setTimeout(() => {
+        popup.remove();
+    }, 3000);
+    
     addGameMessage(`${winner.name} won this round! The answer was: ${answer}`, 'correct-answer');
+    addGameMessage(`Round ${currentRound} of ${totalRounds} completed.`, 'system-message');
+    
+    // Display transition message
+    if (currentRound < totalRounds) {
+      addGameMessage('The winner will be the game master for the next round.', 'system-message');
+    } else {
+      addGameMessage('All rounds completed! Determining the final winner...', 'system-message');
+    }
+    
     updatePlayersList(scores);
     
     // Reset controls for next round
+    playerGuessControls.style.display = 'none';
     guessInput.disabled = true;
     submitGuessBtn.disabled = true;
+    
+    // Reset other controls
+    const optionsContainer = document.getElementById('options-container');
+    if (optionsContainer) {
+      optionsContainer.style.display = 'none';
+    }
+    const guessInputContainer = document.querySelector('.guess-input-container');
+    if (guessInputContainer) {
+      guessInputContainer.style.display = 'none';
+    }
   });
-  
-  socket.on('gameEnded', ({ winner, finalScores, newMaster }) => {
+    socket.on('gameEnded', ({ winner, finalScores, newMaster }) => {
+    // Create end game modal with winner announcement and options
+    const endGameModal = document.createElement('div');
+    endGameModal.className = 'end-game-modal';
+    
+    const modalContent = document.createElement('div');
+    modalContent.className = 'end-game-modal-content';
+    
+    const winnerAnnouncement = document.createElement('h2');
+    winnerAnnouncement.className = 'winner-title';
+    winnerAnnouncement.innerHTML = `🏆 ${winner.name} wins! 🏆`;
+    
+    const scoreDisplay = document.createElement('p');
+    scoreDisplay.className = 'winner-score';
+    scoreDisplay.textContent = `Final score: ${winner.score} points`;
+    
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'end-game-options';
+      const restartBtn = document.createElement('button');
+    restartBtn.className = 'game-btn restart-game-btn';
+    restartBtn.textContent = '🔄 Start New Game';
+    restartBtn.onclick = () => {
+      endGameModal.remove();
+      
+      // Two options: completely new game or restart current game
+      const newGameOptions = document.createElement('div');
+      newGameOptions.className = 'new-game-options-modal';
+      
+      const optionsContent = document.createElement('div');
+      optionsContent.className = 'new-game-options-content';
+      
+      optionsContent.innerHTML = `
+        <h3>Start a New Game</h3>
+        <p>Choose an option:</p>
+        <button id="brand-new-game" class="game-btn">Create Brand New Game</button>
+        <button id="restart-current-game" class="game-btn">Restart Current Game (Keep Players)</button>
+        <button id="cancel-restart" class="game-btn game-btn-secondary">Cancel</button>
+      `;
+      
+      newGameOptions.appendChild(optionsContent);
+      document.body.appendChild(newGameOptions);
+      
+      // Brand new game button
+      document.getElementById('brand-new-game').addEventListener('click', () => {
+        newGameOptions.remove();
+        // Reset UI to prepare for a completely new game
+        playerGuessControls.style.display = 'none';
+        gameMasterControls.style.display = 'none';
+        gameMessagesSection.style.display = 'none';
+        gameInfoSection.style.display = 'none';
+        gamePlayArea.style.display = 'none';
+        gameSetupSection.style.display = 'block';
+        gameMessages.innerHTML = '';
+        currentGameId = null;
+        addGameMessage('Ready to start a new game!', 'system-message');
+      });
+      
+      // Restart current game button
+      document.getElementById('restart-current-game').addEventListener('click', () => {
+        newGameOptions.remove();
+        // Request server to restart the current game
+        if (currentGameId) {
+          socket.emit('restartGame', { gameId: currentGameId });
+          addGameMessage('Requesting game restart...', 'system-message');
+        }
+      });
+      
+      // Cancel button
+      document.getElementById('cancel-restart').addEventListener('click', () => {
+        newGameOptions.remove();
+      });
+    };
+    
+    const continueBtn = document.createElement('button');
+    continueBtn.className = 'game-btn continue-game-btn';
+    continueBtn.textContent = '👑 Continue as Game Master';
+    continueBtn.onclick = () => {
+      endGameModal.remove();
+      if (isGameMaster) {
+        gameMasterControls.style.display = 'block';
+        document.getElementById('question-inputs').innerHTML = `
+          <div class="question-input-row">
+            <input type="text" class="question-input" placeholder="Enter your question">
+            <input type="text" class="answer-input" placeholder="Enter the answer">
+          </div>
+        `;
+        addGameMessage('You are now the game master. Create new questions!', 'system-message');
+      }
+    };
+    
+    const exitBtn = document.createElement('button');
+    exitBtn.className = 'game-btn exit-game-btn';
+    exitBtn.textContent = '❌ Exit Game';
+    exitBtn.onclick = () => {
+      endGameModal.remove();
+      closeGameOverlay();
+    };
+    
+    // Build the modal structure
+    optionsContainer.appendChild(restartBtn);
+    optionsContainer.appendChild(continueBtn);
+    optionsContainer.appendChild(exitBtn);
+    
+    modalContent.appendChild(winnerAnnouncement);
+    modalContent.appendChild(scoreDisplay);
+    modalContent.appendChild(optionsContainer);
+    endGameModal.appendChild(modalContent);
+    
+    // Add to page
+    document.body.appendChild(endGameModal);
+    
+    // Also add winner message to game feed
     const winnerMessage = document.createElement('div');
     winnerMessage.className = 'winner-announcement';
     winnerMessage.textContent = `🏆 ${winner.name} wins the game with ${winner.score} points! 🏆`;
@@ -774,19 +983,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update game master
     isGameMaster = socket.id === newMaster;
-    
-    if (isGameMaster) {
-      setTimeout(() => {
-        gameMasterControls.style.display = 'block';
-        document.getElementById('question-inputs').innerHTML = `
-          <div class="question-input-row">
-            <input type="text" class="question-input" placeholder="Enter your question">
-            <input type="text" class="answer-input" placeholder="Enter the answer">
-          </div>
-        `;
-        addGameMessage('You are now the game master. Create new questions!', 'system-message');
-      }, 3000);
-    }
   });
   
   socket.on('newGameMaster', ({ masterId, masterName }) => {
@@ -812,8 +1008,130 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('playerLeft', ({ name }) => {
     addGameMessage(`${name} has left the game`, 'system-message');
   });
-  
-  socket.on('error', (message) => {
+    socket.on('error', (message) => {
     addGameMessage(message, 'wrong-answer');
+  });
+  
+  socket.on('playerJoined', ({ name, isAI }) => {
+    const message = isAI ? `${name} has joined the game as an AI player` : `${name} has joined the game`;
+    addGameMessage(message, 'system-message');
+  });
+  
+  socket.on('gameRestarted', ({ gameMaster, masterName, players }) => {
+    // Create a game restart notification
+    const restartNotice = document.createElement('div');
+    restartNotice.className = 'restart-notice';
+    restartNotice.innerHTML = `
+      <h3>Game Restarted!</h3>
+      <p>All scores have been reset</p>
+      <p>${masterName} is the game master</p>
+    `;
+    document.body.appendChild(restartNotice);
+    
+    setTimeout(() => {
+      restartNotice.remove();
+    }, 3000);
+    
+    // Update game state
+    isGameMaster = socket.id === gameMaster;
+    
+    // Reset game UI
+    gameMessages.innerHTML = '';
+    playerGuessControls.style.display = 'none';
+    gameMasterControls.style.display = 'none';
+    
+    addGameMessage('🔄 Game has been restarted! All scores are reset to 0.', 'system-message');
+    addGameMessage(`${masterName} is the game master.`, 'system-message');
+    
+    // Update player list with reset scores
+    updatePlayersList(players);
+    
+    if (isGameMaster) {
+      gameMasterControls.style.display = 'block';
+      document.getElementById('question-inputs').innerHTML = `
+        <div class="question-input-row">
+          <input type="text" class="question-input" placeholder="Enter your question">
+          <input type="text" class="answer-input" placeholder="Enter the answer">
+        </div>
+      `;
+      addGameMessage('You are now the game master. Create new questions!', 'system-message');
+    }
+  });
+    socket.on('newRound', ({ roundNumber, totalRounds, newMaster, newMasterName, isAIMaster }) => {
+    // Create a round transition notification
+    const roundTransition = document.createElement('div');
+    roundTransition.className = 'round-transition';
+    roundTransition.innerHTML = `
+      <h3>Round ${roundNumber} of ${totalRounds}</h3>
+      <p>${newMasterName} is the new game master!</p>
+    `;
+    document.body.appendChild(roundTransition);
+    
+    setTimeout(() => {
+      roundTransition.remove();
+    }, 3000);
+    
+    addGameMessage(`Round ${roundNumber} of ${totalRounds} - ${newMasterName} is the new game master!`, 'system-message');
+    
+    // Update game state
+    isGameMaster = socket.id === newMaster;
+    
+    // Reset controls
+    playerGuessControls.style.display = 'none';
+    gameMasterControls.style.display = 'none';
+    
+    // Reset guessing controls
+    guessInput.disabled = true;
+    submitGuessBtn.disabled = true;
+    const optionsContainer = document.getElementById('options-container');
+    if (optionsContainer) {
+      optionsContainer.style.display = 'none';
+    }
+    
+    if (isGameMaster) {
+      // Show game master controls with slight delay for better UX
+      setTimeout(() => {
+        gameMasterControls.style.display = 'block';
+        document.getElementById('question-inputs').innerHTML = `
+          <div class="question-input-row">
+            <input type="text" class="question-input" placeholder="Enter your question">
+            <input type="text" class="answer-input" placeholder="Enter the answer">
+          </div>
+        `;
+        addGameMessage('You are now the game master for this round. Create new questions!', 'system-message');
+      }, 1000);
+    } else {
+      if (isAIMaster) {
+        addGameMessage(`${newMasterName} (AI) is thinking of questions for this round...`, 'system-message');
+      } else {
+        addGameMessage('Waiting for the game master to create questions...', 'system-message');
+      }
+    }
+  });
+    socket.on('aiHostingRound', ({ aiName, topic, isMultipleChoice, questionCount }) => {
+    const questionType = isMultipleChoice ? 'multiple-choice' : 'standard';
+    
+    // Create a more prominent notification for AI hosting
+    const aiHostingNotice = document.createElement('div');
+    aiHostingNotice.className = 'ai-hosting-notice';
+    aiHostingNotice.innerHTML = `
+      <h3>AI Taking Control!</h3>
+      <p>${aiName} is now hosting the next round</p>
+      <p>Topic: ${topic}</p>
+      <p>${questionCount} ${questionType} questions</p>
+      <p>Get ready!</p>
+    `;
+    document.body.appendChild(aiHostingNotice);
+    
+    setTimeout(() => {
+      aiHostingNotice.remove();
+    }, 4000);
+    
+    addGameMessage(`${aiName} is hosting this round with ${questionCount} ${questionType} questions about ${topic}!`, 'system-message');
+    addGameMessage('Get ready - the game will start automatically in 3 seconds!', 'system-message');
+  });
+  
+  socket.on('aiGuessedCorrect', ({ playerName, answer }) => {
+    addGameMessage(`${playerName} guessed correctly: ${answer}`, 'correct-answer');
   });
 });

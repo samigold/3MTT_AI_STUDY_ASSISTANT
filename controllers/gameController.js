@@ -5,11 +5,11 @@ const openai = new OpenAI({
 });
 
 // Generate questions for the guessing game using AI
-async function generateAIQuestions(course, topic, isMultipleChoice = false) {
+async function generateAIQuestions(course, topic, isMultipleChoice = false, questionCount = 5) {
   try {
     let prompt;
       if (isMultipleChoice) {
-      prompt = `Create 8 challenging multiple-choice questions about ${topic} in the context of ${course}.
+      prompt = `Create ${questionCount} challenging multiple-choice questions about ${topic} in the context of ${course}.
       
 For each question:
 - Provide a clear, specific question
@@ -41,7 +41,7 @@ Examples:
    Correct Option: 1 (margin)
 
 Make the questions of medium to hard difficulty for someone learning ${course}, specifically about ${topic}.`;    } else {
-      prompt = `Create 10 challenging "guess the answer" questions about ${topic} in the context of ${course}.
+      prompt = `Create ${questionCount} challenging "guess the answer" questions about ${topic} in the context of ${course}.
       
 For each question, provide a clear question that has a specific single-word or short phrase answer.
 Make the questions interesting and educational - they should test knowledge about ${topic}.

@@ -130,7 +130,7 @@ io.on('connection', (socket) => {
         io.to(gameId).emit('gameStarted', { question: question.question });
       }
 
-      let timeLeft = 10;
+      let timeLeft = 60;
       // Set up timer updates
       const timerInterval = setInterval(() => {
         timeLeft--;
@@ -147,7 +147,7 @@ io.on('connection', (socket) => {
       session.timer = setTimeout(() => {
         clearInterval(timerInterval);
         endRound(gameId, null);
-      }, 10000); // 10 seconds
+      }, 60000); // 60 seconds
     }
   });
   // Handle guess
