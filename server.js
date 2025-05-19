@@ -128,9 +128,7 @@ io.on('connection', (socket) => {
         });
       } else {
         io.to(gameId).emit('gameStarted', { question: question.question });
-      }
-
-      let timeLeft = 10;
+      }      let timeLeft = 60; // Set to 60 seconds
       // Set up timer updates
       const timerInterval = setInterval(() => {
         timeLeft--;
@@ -147,7 +145,7 @@ io.on('connection', (socket) => {
       session.timer = setTimeout(() => {
         clearInterval(timerInterval);
         endRound(gameId, null);
-      }, 10000); // 10 seconds
+      }, 60000); // 60 seconds
     }
   });
   // Handle guess
@@ -537,8 +535,7 @@ function endRound(gameId, winnerId) {
           }
         });
       }
-      
-      let timeLeft = 60; // Set back to 60 seconds for the full game timer
+        let timeLeft = 60; // 60 seconds for the full game timer
       const timerInterval = setInterval(() => {
         timeLeft--;
         io.to(gameId).emit('timerUpdate', { timeLeft });
@@ -551,7 +548,7 @@ function endRound(gameId, winnerId) {
       session.timer = setTimeout(() => {
         clearInterval(timerInterval);
         endRound(gameId, null);
-      }, 60000);
+      }, 60000); // 60 seconds
     }, 5000);
   } else {
     // Increment round counter
@@ -663,7 +660,7 @@ function endRound(gameId, winnerId) {
                   io.to(gameId).emit('gameStarted', { question: question.question });
                 }
           
-                let timeLeft = 60;
+                let timeLeft = 10;
                 // Set up timer updates
                 const timerInterval = setInterval(() => {
                   timeLeft--;
@@ -680,7 +677,7 @@ function endRound(gameId, winnerId) {
                 session.timer = setTimeout(() => {
                   clearInterval(timerInterval);
                   endRound(gameId, null);
-                }, 60000); // 60 seconds
+                }, 10000); // 60 seconds
               }, 3000); // Wait 3 seconds before starting
             }
           } catch (error) {

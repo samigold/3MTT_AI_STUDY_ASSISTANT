@@ -195,10 +195,14 @@
           <a href="https://twitter.com/samigold" target="_blank" rel="noopener" class="social-link" title="Twitter"><i class='bx bxl-twitter'></i></a>
         </div>
       </div>
-    </div>
-  </div>
+    </div>  </div>
+  
+  <!-- Game Launcher Button -->
+  <button id="game-launcher-btn" class="launch-game-btn" title="Launch Guessing Game">🎮</button>
     <script src="app.js"></script>
+  <!-- Game initialization script - needed before game.js -->
+  <script src="gameInit.js"></script>
   <!-- Game integration script -->
-  <script src="game.js"></script>
+  <script type="module" src="game.js"></script>
 </body>
 </html>

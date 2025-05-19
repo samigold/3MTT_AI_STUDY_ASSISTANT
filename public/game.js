@@ -1,1137 +1,1125 @@
-// Game integration for 3MTT Study Assistant
+/**
+ * 3MTT Guessing Game
+ * Entry point that loads the modular game system
+ * 
+ * This module-based file ensures the game system is properly initialized
+ * and connected to the game launch button that was created by gameInit.js
+ */
 
-// Helper function to escape HTML special characters
-function escapeHTML(unsafeText) {
-  if (unsafeText === undefined || unsafeText === null) {
-    return '';
+// Import the modular system
+import { GameController } from './js/controllers/GameController.js';
+import * as GameDebug from './js/utils/GameDebug.js';
+// Removed duplicate import and only use the namespace import
+
+console.log('Game module loaded - initializing game system');
+
+// Initialize game controller
+let gameController = null;
+
+// Status indicator for user feedback
+let gameStatusIndicator = null;
+
+// Floating game feed for immediate updates
+let floatingGameFeed = null;
+let floatingFeedItems = [];
+const MAX_FEED_ITEMS_COLLAPSED = 3; // Maximum number of items to show in collapsed feed
+const MAX_FEED_ITEMS_EXPANDED = 10; // Maximum number of items to show in expanded feed
+let isGameFeedExpanded = false; // Track if the game feed is expanded
+
+// Create a simple event system to track initialization
+const gameInitEvents = {
+  controllerInitialized: false,
+  buttonConnected: false,
+  uiInitialized: false
+};
+
+/**
+ * Create or update the game status indicator
+ * @param {string} status - Status message to display
+ * @param {string} type - Type of status: 'info', 'success', 'warning', 'error'
+ */
+function updateGameStatus(status, type = 'info') {
+  // Create the status indicator if it doesn't exist
+  if (!gameStatusIndicator) {
+    gameStatusIndicator = document.createElement('div');
+    gameStatusIndicator.id = 'game-status-indicator';
+    gameStatusIndicator.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 10000;
+      transition: all 0.3s ease;
+      opacity: 0;
+      transform: translateY(-10px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      max-width: 300px;
+      text-align: center;
+      pointer-events: none;
+    `;
+    document.body.appendChild(gameStatusIndicator);
+    
+    // Add the style for different status types
+    const style = document.createElement('style');
+    style.textContent = `
+      #game-status-indicator.info {
+        background-color: #2196F3;
+        color: white;
+      }
+      #game-status-indicator.success {
+        background-color: #4CAF50;
+        color: white;
+      }
+      #game-status-indicator.warning {
+        background-color: #FF9800;
+        color: white;
+      }
+      #game-status-indicator.error {
+        background-color: #F44336;
+        color: white;
+      }
+      #game-status-indicator.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      @media (max-width: 768px) {
+        #game-status-indicator {
+          bottom: 10px;
+          top: auto;
+          left: 10px;
+          right: 10px;
+          max-width: calc(100% - 20px);
+        }
+      }
+    `;
+    document.head.appendChild(style);
   }
-  return String(unsafeText)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+
+  // Update the status indicator
+  gameStatusIndicator.textContent = status;
+  gameStatusIndicator.className = type;
+  gameStatusIndicator.classList.add('visible');
+
+  // Hide after a delay for non-error statuses
+  if (type !== 'error') {
+    setTimeout(() => {
+      gameStatusIndicator.classList.remove('visible');
+    }, 3000);
+  }
+  
+  // Also add to floating feed for more persistent visibility
+  addToFloatingFeed(status, type);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize socket connection
-  const socket = io();
-  
-  // Add error handler for socket
-  socket.on('error', (errorMessage) => {
-    console.error('Socket error:', errorMessage);
-    addGameMessage(errorMessage || 'An error occurred. Please try again.', 'wrong-answer');
-    // Re-enable buttons that might have been disabled
-    if (window.generateAIQuestionsBtn) {
-      window.generateAIQuestionsBtn.disabled = false;
-    }
-  });
-  
-  // Game variables
-  let currentGameId = null;
-  let isGameMaster = false;
-  let currentQuestion = null;
-  let playerName = '';
-  let currentCourse = '';
-  let currentTopic = '';
-  
-  // Create game UI elements
-  const launchGameBtn = document.createElement('button');
-  launchGameBtn.className = 'launch-game-btn';
-  launchGameBtn.innerHTML = '<i class="bx bx-game"></i>';
-  launchGameBtn.title = 'Launch Guessing Game';
-  document.body.appendChild(launchGameBtn);
-  
-  // Game overlay and container (initially hidden)
-  const gameOverlay = document.createElement('div');
-  gameOverlay.className = 'game-overlay';
-  gameOverlay.style.display = 'none';
-  
-  // Main game container
-  const gameContainer = document.createElement('div');
-  gameContainer.className = 'game-container';
-  
-  // Game UI structure
-  gameContainer.innerHTML = `
-    <div class="game-header">
-      <h2>3MTT Guessing Game</h2>
-      <p>Test your knowledge with friends!</p>
-      <button class="close-game-btn">&times;</button>
-    </div>
-    <div class="game-content">
-      <!-- Game setup section -->      <div id="game-setup" class="game-section game-setup-section">
-        <h3>Start or Join a Game</h3>
-        <input type="text" id="game-player-name" class="player-name-input" placeholder="Enter your name" required>
-        <div class="game-topic-container">
-          <div class="topic-input-row">
-            <select id="game-course-select" class="course-select">
-              <option value="Frontend">Frontend Development</option>
-              <option value="Backend">Backend Development</option>
-              <option value="Product">Product Management</option>
-              <option value="UI/UX">UI/UX Design</option>
-              <option value="Data Science">Data Science</option>
-              <option value="Cybersecurity">Cybersecurity</option>
-              <option value="Cloud Computing">Cloud Computing</option>
-              <option value="DevOps">DevOps</option>
-              <option value="General Knowledge">General Knowledge</option>
-            </select>
-            <input type="text" id="game-topic-input" class="topic-input" placeholder="Enter a topic for questions (e.g. JavaScript, React)">
-          </div>
-        </div>
-        <div class="game-setup-buttons">
-          <button id="create-game-btn" class="game-btn">Create New Game</button>
-          <div class="join-game-row">
-            <input type="text" id="game-id-input" placeholder="Enter Game ID">
-            <button id="join-game-btn" class="game-btn game-btn-secondary">Join Game</button>
-          </div>
-        </div>
-      </div>
+/**
+ * Create and manage a floating feed of recent game events
+ * @param {string} message - Message to display
+ * @param {string} type - Message type: 'info', 'success', 'warning', 'error'
+ */
+function addToFloatingFeed(message, type) {
+  // Create the floating feed container if it doesn't exist and game controller is initialized
+  if (!floatingGameFeed && gameController) {
+    // Create container
+    floatingGameFeed = document.createElement('div');
+    floatingGameFeed.id = 'floating-game-feed';
+    floatingGameFeed.style.cssText = `
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      max-width: 320px;
+      max-height: ${isGameFeedExpanded ? '350px' : '200px'};
+      background-color: rgba(33, 33, 33, 0.85);
+      backdrop-filter: blur(4px);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 9999;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+      transform: translateY(-150%);
+    `;
+    document.body.appendChild(floatingGameFeed);
+    
+    // Create header
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    floatingGameFeed.appendChild(header);
+    
+    // Add title
+    const title = document.createElement('span');
+    title.textContent = 'Game Feed';
+    title.style.cssText = `
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    `;
+    header.appendChild(title);
+      // Create buttons container
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.cssText = `
+      display: flex;
+      gap: 8px;
+    `;
+    
+    // Add clear button
+    const clearBtn = document.createElement('button');
+    clearBtn.innerHTML = '🗑️';
+    clearBtn.title = 'Clear Feed';
+    clearBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      font-weight: normal;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    `;
+    clearBtn.onclick = () => {
+      clearFloatingFeed();
+    };
+    buttonsContainer.appendChild(clearBtn);
+    
+    // Add expand/collapse button
+    const expandBtn = document.createElement('button');
+    expandBtn.innerHTML = isGameFeedExpanded ? '&minus;' : '&plus;';
+    expandBtn.title = isGameFeedExpanded ? 'Collapse Feed' : 'Expand Feed';
+    expandBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    `;
+    expandBtn.onclick = () => {
+      isGameFeedExpanded = !isGameFeedExpanded;
+      expandBtn.innerHTML = isGameFeedExpanded ? '&minus;' : '&plus;';
+      expandBtn.title = isGameFeedExpanded ? 'Collapse Feed' : 'Expand Feed';
+      floatingGameFeed.style.maxHeight = isGameFeedExpanded ? '350px' : '200px';
       
-      <!-- Game info section -->      <div id="game-info" class="game-section" style="display: none;">
-        <div class="game-id-display">
-          <span>Game ID:</span>
-          <span id="game-id-display" class="game-id-text" title="Click to copy"></span>
-          <button id="copy-game-id" class="copy-button">
-            <i class="bx bx-copy"></i> Copy
-          </button>
-        </div>
-        <div id="players-list" class="players-list">
-          <h3>Players</h3>
-          <div id="players-container"></div>
-          <button id="add-ai-player-btn" class="game-btn game-btn-secondary">Add AI Player</button>
-        </div>
-      </div>
+      // Update feed display with new limit
+      const maxItems = isGameFeedExpanded ? MAX_FEED_ITEMS_EXPANDED : MAX_FEED_ITEMS_COLLAPSED;
+      while (floatingFeedItems.length > maxItems) {
+        floatingFeedItems.shift();
+      }
+      updateFloatingFeedDisplay();
+    };
+    buttonsContainer.appendChild(expandBtn);
+    
+    // Add minimize button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.title = 'Hide Feed';
+    closeBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    `;
+    closeBtn.onclick = () => {
+      floatingGameFeed.style.transform = 'translateY(-150%)';
       
-      <!-- Game area -->
-      <div id="game-play-area" class="game-section" style="display: none;">
-        <div class="game-question-area">
-          <div id="game-timer" class="game-timer">Time: <span id="time-left">60</span>s</div>
-          <h3>Question:</h3>
-          <p id="game-question" class="game-question"></p>
-        </div>
+      // Show the floating feed toggle button
+      if (!document.getElementById('show-feed-btn')) {
+        const showFeedBtn = document.createElement('button');
+        showFeedBtn.id = 'show-feed-btn';
+        showFeedBtn.innerHTML = '💬';
+        showFeedBtn.title = 'Show Game Feed';
+        showFeedBtn.style.cssText = `
+          position: fixed;
+          top: 10px;
+          left: 10px;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background-color: var(--game-primary, #2196F3);
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.3s ease;
+        `;
         
-        <!-- Game master controls -->
-        <div id="game-master-controls" class="game-master-controls" style="display: none;">
-          <div id="question-inputs">
-            <div class="question-input-row">
-              <input type="text" class="question-input" placeholder="Enter your question">
-              <input type="text" class="answer-input" placeholder="Enter the answer">
-            </div>
-          </div>          <button id="add-question-btn" class="game-btn game-btn-outline">Add Another Question</button>          <div class="question-controls">
-            <div class="question-type-toggle">
-              <label class="toggle-container">
-                <span>Multiple Choice</span>
-                <label class="switch">
-                  <input type="checkbox" id="multiple-choice-toggle">
-                  <span class="slider round"></span>
-                </label>
-              </label>
-            </div>
-            
-            <div class="question-count-selector">
-              <label for="question-count">Number of Questions:</label>
-              <select id="question-count" class="question-count">
-                <option value="3">3</option>
-                <option value="5" selected>5</option>
-                <option value="8">8</option>
-                <option value="10">10</option>
-                <option value="15">15</option>
-              </select>
-            </div>
-          </div>
-          <button id="generate-ai-questions-btn" class="game-btn game-btn-secondary">Generate AI Questions</button>
-          <button id="start-game-btn" class="game-btn">Start Game</button>
-        </div>
-          <!-- Player controls -->
-        <div id="player-guess-controls" class="player-controls" style="display: none;">
-          <!-- Text input for regular questions -->
-          <div class="guess-input-container">
-            <input type="text" id="guess-input" class="guess-input" placeholder="Enter your guess">
-            <button id="submit-guess-btn" class="game-btn">Submit Guess</button>
-            <p class="attempts-counter">Attempts left: <span id="attempts-left">3</span></p>
-          </div>
-          
-          <!-- Options for multiple choice questions -->
-          <div id="options-container" class="options-container" style="display: none;">
-            <div class="options-list">
-              <!-- Options will be dynamically inserted here -->
-            </div>
-            <button id="submit-option-btn" class="game-btn">Submit Answer</button>
-            <p class="attempts-counter">Attempts left: <span id="mc-attempts-left">3</span></p>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Game messages -->
-      <div id="game-messages-section" class="game-section" style="display: none;">
-        <h3>Game Feed</h3>
-        <div id="game-messages" class="game-messages"></div>
-      </div>
-    </div>
-  `;
-  
-  gameOverlay.appendChild(gameContainer);
-  document.body.appendChild(gameOverlay);
-  
-  // Event listeners
-  launchGameBtn.addEventListener('click', openGameOverlay);
-  
-  // Close button
-  const closeGameBtn = gameContainer.querySelector('.close-game-btn');
-  closeGameBtn.addEventListener('click', closeGameOverlay);
-  
-  // Game buttons
-  const createGameBtn = gameContainer.querySelector('#create-game-btn');
-  const joinGameBtn = gameContainer.querySelector('#join-game-btn');
-  const gameIdInput = gameContainer.querySelector('#game-id-input');
-  const playerNameInput = gameContainer.querySelector('#game-player-name');
-  const copyGameIdBtn = gameContainer.querySelector('#copy-game-id');
-  const gameIdDisplay = gameContainer.querySelector('#game-id-display');
-  const addQuestionBtn = gameContainer.querySelector('#add-question-btn');
-  const generateAIQuestionsBtn = gameContainer.querySelector('#generate-ai-questions-btn');
-  const startGameBtn = gameContainer.querySelector('#start-game-btn');
-  const submitGuessBtn = gameContainer.querySelector('#submit-guess-btn');
-  const guessInput = gameContainer.querySelector('#guess-input');
-  const attemptsLeft = gameContainer.querySelector('#attempts-left');
-  
-  // Sections
-  const gameSetupSection = gameContainer.querySelector('#game-setup');
-  const gameInfoSection = gameContainer.querySelector('#game-info');
-  const gamePlayArea = gameContainer.querySelector('#game-play-area');
-  const gameMasterControls = gameContainer.querySelector('#game-master-controls');
-  const playerGuessControls = gameContainer.querySelector('#player-guess-controls');
-  const gameMessagesSection = gameContainer.querySelector('#game-messages-section');
-  const gameMessages = gameContainer.querySelector('#game-messages');
-  
-  // UI elements
-  const gameQuestion = gameContainer.querySelector('#game-question');
-  const playersContainer = gameContainer.querySelector('#players-container');
-  const timeLeft = gameContainer.querySelector('#time-left');
-  const gameTimer = gameContainer.querySelector('#game-timer');
-  // Event listeners for game actions
-  createGameBtn.addEventListener('click', createGame);
-  joinGameBtn.addEventListener('click', joinGame);
-  copyGameIdBtn.addEventListener('click', copyGameId);
-  gameIdDisplay.addEventListener('click', copyGameId);
-  addQuestionBtn.addEventListener('click', addQuestionInput);
-  generateAIQuestionsBtn.addEventListener('click', generateQuestions);
-  startGameBtn.addEventListener('click', startGame);
-  submitGuessBtn.addEventListener('click', submitGuess);
-  
-  // AI player button
-  const addAIPlayerBtn = gameContainer.querySelector('#add-ai-player-btn');
-  if (addAIPlayerBtn) {
-    addAIPlayerBtn.addEventListener('click', addAIPlayer);
-  }
-  
-  // Multiple choice toggle
-  const multipleChoiceToggle = document.querySelector('#multiple-choice-toggle');
-  if (multipleChoiceToggle) {
-    multipleChoiceToggle.addEventListener('change', updateQuestionInputs);
-  }
-  
-  // Update question inputs based on multiple choice toggle
-  function updateQuestionInputs() {
-    const isMultipleChoice = document.querySelector('#multiple-choice-toggle')?.checked || false;
-    
-    // Clear question inputs and add a new one in the proper format
-    const questionInputs = document.getElementById('question-inputs');
-    questionInputs.innerHTML = '';
-    addQuestionInput();
-    
-    // Update the message about question type
-    addGameMessage(`Question type set to ${isMultipleChoice ? 'multiple-choice' : 'standard'} format.`, 'system-message');
-  }
-    // Function to open game overlay
-  function openGameOverlay() {
-    // Try to get current course and topic from the main app form first
-    const appCourseSelect = document.getElementById('course');
-    const questionInput = document.getElementById('question');
-    
-    if (appCourseSelect && questionInput && questionInput.value) {
-      currentCourse = appCourseSelect.value || 'General Knowledge';
-      currentTopic = questionInput.value;
-      
-      // Pre-fill the game topic fields with values from the main app
-      const gameTopicInput = document.getElementById('game-topic-input');
-      const gameCourseSelect = document.getElementById('game-course-select');
-      
-      if (gameTopicInput && gameCourseSelect) {
-        gameTopicInput.value = currentTopic;
-        
-        // Try to match course selection
-        for (let i = 0; i < gameCourseSelect.options.length; i++) {
-          if (gameCourseSelect.options[i].value === currentCourse) {
-            gameCourseSelect.selectedIndex = i;
-            break;
+        showFeedBtn.onclick = () => {
+          if (floatingGameFeed) {
+            floatingGameFeed.style.transform = 'translateY(0)';
+            showFeedBtn.remove();
           }
+        };
+        
+        // Add pulsing animation when there are new messages
+        const pulseStyle = document.createElement('style');
+        pulseStyle.textContent = `
+          @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          
+          @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            100% { transform: scale(1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+          }
+          
+          .pulse {
+            animation: pulse 1s infinite ease-in-out;
+          }
+        `;
+        document.head.appendChild(pulseStyle);
+        
+        document.body.appendChild(showFeedBtn);
+      }
+    };
+    buttonsContainer.appendChild(closeBtn);
+    
+    // Add buttons container to header
+    header.appendChild(buttonsContainer);
+    
+    // Create feed container
+    const feedContainer = document.createElement('div');
+    feedContainer.style.cssText = `
+      padding: 0;
+      overflow-y: auto;
+      max-height: ${isGameFeedExpanded ? '300px' : '150px'};
+      transition: max-height 0.3s ease;
+    `;
+    floatingGameFeed.appendChild(feedContainer);
+    
+    // Create "View All" button
+    const viewAllBtn = document.createElement('button');
+    viewAllBtn.textContent = 'View Full Game';
+    viewAllBtn.style.cssText = `
+      background-color: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+      padding: 8px;
+      width: 100%;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: auto;
+    `;
+    viewAllBtn.onmouseover = () => {
+      viewAllBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+    };
+    viewAllBtn.onmouseout = () => {
+      viewAllBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    };
+    viewAllBtn.onclick = () => {
+      // Find and click the game button to open the full game
+      const gameBtn = document.getElementById('game-launcher-btn');
+      if (gameBtn) {
+        gameBtn.click();
+      }
+    };
+    floatingGameFeed.appendChild(viewAllBtn);
+    
+    // Add styles
+    const style = document.createElement('style');
+    style.textContent = `
+      .feed-item {
+        padding: 8px 12px;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        animation: fadein 0.3s;
+        display: flex;
+        align-items: flex-start;
+      }
+      
+      .feed-item:last-child {
+        border-bottom: none;
+      }
+      
+      .feed-item.info {
+        border-left: 3px solid #2196F3;
+      }
+      
+      .feed-item.success {
+        border-left: 3px solid #4CAF50;
+      }
+      
+      .feed-item.warning {
+        border-left: 3px solid #FF9800;
+      }
+      
+      .feed-item.error {
+        border-left: 3px solid #F44336;
+      }
+      
+      .feed-icon {
+        margin-right: 8px;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+      
+      .feed-icon.info {
+        background-color: #2196F3;
+      }
+      
+      .feed-icon.success {
+        background-color: #4CAF50;
+      }
+      
+      .feed-icon.warning {
+        background-color: #FF9800;
+      }
+      
+      .feed-icon.error {
+        background-color: #F44336;
+      }
+      
+      @keyframes fadein {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      /* Mobile adjustments */
+      @media (max-width: 768px) {
+        #floating-game-feed {
+          left: 0;
+          top: 0;
+          width: 100%;
+          max-width: none;
+          border-radius: 0;
+        }
+        
+        #show-feed-btn {
+          bottom: 10px;
+          top: auto;
+          left: 10px;
         }
       }
-    }
-    
-    gameOverlay.style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // Prevent scrolling behind overlay
-    
-    // Set player name from localStorage if available
-    const savedName = localStorage.getItem('playerName');
-    if (savedName) {
-      playerNameInput.value = savedName;
-    }
-    
-    // Check for existing game in session
-    const existingGameId = localStorage.getItem('currentGameId');
-    if (existingGameId) {
-      gameIdInput.value = existingGameId;
-    }
-  }
-    // Function to close game overlay
-  function closeGameOverlay() {
-    // Clean up any game state
-    if (currentGameId) {
-      // Leave the current game room if connected
-      socket.emit('disconnect');
-    }
-    
-    // Reset UI states
-    gameSetupSection.style.display = 'block';
-    gameInfoSection.style.display = 'none';
-    gamePlayArea.style.display = 'none';
-    gameMasterControls.style.display = 'none';
-    playerGuessControls.style.display = 'none';
-    gameMessagesSection.style.display = 'none';
-    
-    // Clear game messages
-    if (gameMessages) {
-      gameMessages.innerHTML = '';
-    }
-    
-    // Reset game variables
-    currentGameId = null;
-    isGameMaster = false;
-    currentQuestion = null;
-    
-    // Reset any modal or popup that might be visible
-    const modals = document.querySelectorAll('.end-game-modal, .win-popup, .round-transition, .ai-hosting-notice');
-    modals.forEach(modal => {
-      if (modal) modal.remove();
-    });
-    
-    // Hide overlay
-    gameOverlay.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-    // Create a new game
-  function createGame() {
-    playerName = playerNameInput.value.trim();
-    if (!playerName) {
-      addGameMessage('Please enter your name', 'wrong-answer');
-      return;
-    }
-    
-    // Get the current course and topic values
-    const gameCourseSelect = document.getElementById('game-course-select');
-    const gameTopicInput = document.getElementById('game-topic-input');
-    
-    if (gameCourseSelect && gameTopicInput) {
-      currentCourse = gameCourseSelect.value;
-      currentTopic = gameTopicInput.value.trim();
-    }
-    
-    localStorage.setItem('playerName', playerName);
-    socket.emit('createGame', { playerName });
-    
-    // Hide setup, show waiting screen
-    gameSetupSection.style.display = 'none';
-    gameInfoSection.style.display = 'block';
-    gamePlayArea.style.display = 'block';
-    gameMessagesSection.style.display = 'block';
-    
-    addGameMessage('Game created! Share the Game ID with friends to let them join.', 'system-message');
-  }
-  
-  // Join existing game
-  function joinGame() {
-    playerName = playerNameInput.value.trim();
-    const gameId = gameIdInput.value.trim();
-    
-    if (!playerName) {
-      addGameMessage('Please enter your name', 'wrong-answer');
-      return;
-    }
-    
-    if (!gameId) {
-      addGameMessage('Please enter a Game ID', 'wrong-answer');
-      return;
-    }
-    
-    localStorage.setItem('playerName', playerName);
-    socket.emit('joinGame', { gameId, playerName });
-    
-    // Hide setup, show waiting screen
-    gameSetupSection.style.display = 'none';
-  }
-  
-  // Copy game ID to clipboard
-  function copyGameId() {
-    if (!currentGameId) return;
-    
-    navigator.clipboard.writeText(currentGameId)
-      .then(() => {
-        showCopyFeedback('Game ID copied!');
-      })
-      .catch(() => {
-        // Fallback
-        const textArea = document.createElement('textarea');
-        textArea.value = currentGameId;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showCopyFeedback('Game ID copied!');
-      });
-  }
-    // Add a new question input row
-  function addQuestionInput() {
-    const questionInputs = document.getElementById('question-inputs');
-    const row = document.createElement('div');
-    row.className = 'question-input-row';
-    
-    // Check if multiple choice toggle is on
-    const isMultipleChoice = document.querySelector('#multiple-choice-toggle')?.checked || false;
-    
-    if (isMultipleChoice) {
-      row.innerHTML = `
-        <input type="text" class="question-input" placeholder="Enter your question">
-        <div class="mc-options-container">
-          <div class="mc-option">
-            <input type="radio" name="correct-option-new" value="0" checked>
-            <input type="text" class="option-input" data-index="0" placeholder="Correct option">
-          </div>
-          <div class="mc-option">
-            <input type="radio" name="correct-option-new" value="1">
-            <input type="text" class="option-input" data-index="1" placeholder="Option 2">
-          </div>
-          <div class="mc-option">
-            <input type="radio" name="correct-option-new" value="2">
-            <input type="text" class="option-input" data-index="2" placeholder="Option 3">
-          </div>
-        </div>
-      `;
       
-      // Update the radio button names to be unique
-      const timestamp = Date.now();
-      const radios = row.querySelectorAll('input[type="radio"]');
-      radios.forEach(radio => {
-        radio.name = `correct-option-${timestamp}`;
-      });
-      
-    } else {
-      row.innerHTML = `
-        <input type="text" class="question-input" placeholder="Enter your question">
-        <input type="text" class="answer-input" placeholder="Enter the answer">
-      `;
-    }
-    
-    questionInputs.appendChild(row);
-  }
-  // Generate questions using AI based on current topic
-  function generateQuestions() {
-    // Get the latest values from our game topic fields
-    const gameCourseSelect = document.getElementById('game-course-select');
-    const gameTopicInput = document.getElementById('game-topic-input');
-    
-    if (gameCourseSelect && gameTopicInput) {
-      currentCourse = gameCourseSelect.value;
-      currentTopic = gameTopicInput.value.trim();
-    }
-    
-    if (!currentTopic) {
-      addGameMessage('Please enter a topic for your questions', 'wrong-answer');
-      return;
-    }    // Check if multiple choice option is selected
-    const isMultipleChoice = document.querySelector('#multiple-choice-toggle')?.checked || false;
-    
-    // Get the selected question count
-    const questionCountSelect = document.getElementById('question-count');
-    const questionCount = questionCountSelect ? parseInt(questionCountSelect.value) : 5;
-    
-    addGameMessage(`Generating ${questionCount} ${isMultipleChoice ? 'multiple-choice' : ''} questions about "${currentTopic}"...`, 'system-message');
-    generateAIQuestionsBtn.disabled = true;
-    
-    socket.emit('getAIQuestions', { 
-      course: currentCourse, 
-      topic: currentTopic,
-      isMultipleChoice: isMultipleChoice,
-      questionCount: questionCount
-    });
-  }
-    // Start the game with the current questions
-  function startGame() {
-    const questions = [];
-    const questionRows = document.querySelectorAll('.question-input-row');
-    const isMultipleChoice = document.querySelector('#multiple-choice-toggle')?.checked || false;
-    
-    questionRows.forEach(row => {
-      const question = row.querySelector('.question-input').value.trim();
-      const answer = row.querySelector('.answer-input').value.trim();
-      
-      if (question && answer) {
-        if (isMultipleChoice) {
-          // Get options if they exist
-          const optionsInput = row.querySelector('.options-input');
-          const correctOptionInput = row.querySelector('.correct-option-input');
-          
-          if (optionsInput && correctOptionInput) {
-            try {
-              const options = JSON.parse(optionsInput.value);
-              const correctOption = parseInt(correctOptionInput.value);
-              
-              questions.push({ 
-                question, 
-                answer, 
-                options, 
-                correctOption
-              });
-            } catch (error) {
-              // If parsing fails, add as regular question
-              questions.push({ question, answer });
-            }
-          } else {
-            // Create default multiple choice if no options exist
-            const options = [answer, "Alternative 1", "Alternative 2"];
-            questions.push({ 
-              question, 
-              answer, 
-              options, 
-              correctOption: 0 
-            });
-          }
-        } else {
-          // Regular question
-          questions.push({ question, answer });
+      /* Dark mode support */
+      @media (prefers-color-scheme: dark) {
+        #floating-game-feed {
+          background-color: rgba(20, 20, 20, 0.85);
+        }
+        
+        #show-feed-btn {
+          background-color: #1565c0;
         }
       }
-    });
+    `;
+    document.head.appendChild(style);
     
-    if (questions.length === 0) {
-      addGameMessage('Please add at least one question and answer', 'wrong-answer');
-      return;
-    }
-    
-    socket.emit('addQuestions', { gameId: currentGameId, questions });
-    socket.emit('startGame', { gameId: currentGameId });
-  }
-    // Submit a guess for the current question
-  function submitGuess() {
-    // Check if we're in multiple-choice mode
-    const optionsContainer = document.getElementById('options-container');
-    
-    if (optionsContainer && optionsContainer.style.display !== 'none') {
-      // Multiple choice mode - get selected option
-      const selectedOption = document.querySelector('input[name="mc-option"]:checked');
-      
-      if (!selectedOption) {
-        addGameMessage('Please select an option', 'wrong-answer');
-        return;
-      }
-      
-      const optionIndex = parseInt(selectedOption.value);
-      const optionText = document.querySelector(`label[for="option-${optionIndex}"]`).textContent;
-      
-      socket.emit('makeGuess', { 
-        gameId: currentGameId, 
-        guess: optionText,
-        optionIndex: optionIndex
-      });
-      
-      addGameMessage('You selected: ' + optionText, 'player-message');
-    } else {
-      // Text input mode
-      const guess = guessInput.value.trim();
-      if (!guess) {
-        addGameMessage('Please enter a guess', 'wrong-answer');
-        return;
-      }
-      
-      socket.emit('makeGuess', { gameId: currentGameId, guess });
-      addGameMessage('You guessed: ' + guess, 'player-message');
-      guessInput.value = '';
-    }
-  }
-  
-  // Add message to game feed
-  function addGameMessage(text, className = '') {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `game-message ${className || ''}`;
-    messageDiv.textContent = text;
-    gameMessages.appendChild(messageDiv);
-    gameMessages.scrollTop = gameMessages.scrollHeight;
-  }
-    // Update players list
-  function updatePlayersList(players) {
-    playersContainer.innerHTML = '';
-    
-    // Sort players by score
-    const sortedPlayers = players.sort((a, b) => b.score - a.score);
-    
-    sortedPlayers.forEach(player => {
-      const playerDiv = document.createElement('div');
-      playerDiv.className = 'player-item';
-      
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'player-name';
-      nameSpan.textContent = player.name;
-      
-      if (player.isMaster) {
-        const masterBadge = document.createElement('span');
-        masterBadge.className = 'game-master-indicator';
-        masterBadge.textContent = 'Game Master';
-        nameSpan.appendChild(masterBadge);
-      }
-      
-      if (player.isAI) {
-        const aiBadge = document.createElement('span');
-        aiBadge.className = 'ai-player-indicator';
-        aiBadge.textContent = 'AI';
-        nameSpan.appendChild(aiBadge);
-      }
-      
-      const scoreSpan = document.createElement('span');
-      scoreSpan.className = 'player-score';
-      scoreSpan.textContent = `${player.score} points`;
-      
-      playerDiv.appendChild(nameSpan);
-      playerDiv.appendChild(scoreSpan);
-      playersContainer.appendChild(playerDiv);
-    });
-  }
-    // Show copy feedback
-  function showCopyFeedback(message) {
-    const feedback = document.createElement('div');
-    feedback.className = 'copy-feedback';
-    feedback.textContent = message;
-    document.body.appendChild(feedback);
-    
+  // Animate entrance
     setTimeout(() => {
-      feedback.remove();
-    }, 2000);
-  }
-  
-  // Add AI player to the game
-  function addAIPlayer() {
-    if (!currentGameId || !isGameMaster) {
-      addGameMessage('You need to be the game master to add an AI player', 'wrong-answer');
-      return;
-    }
-    
-    socket.emit('addAIPlayer', { gameId: currentGameId });
-    addGameMessage('Adding an AI player to the game...', 'system-message');
-  }
-  
-  // Socket event handlers
-  socket.on('gameCreated', ({ gameId, isMaster }) => {
-    currentGameId = gameId;
-    isGameMaster = isMaster;
-    gameIdDisplay.textContent = gameId;
-    
-    localStorage.setItem('currentGameId', gameId);
-    
-    gameInfoSection.style.display = 'block';
-    gamePlayArea.style.display = 'block';
-    gameMessagesSection.style.display = 'block';
-    
-    if (isMaster) {
-      gameMasterControls.style.display = 'block';
-      addGameMessage('Game created! Share the Game ID with others to join.', 'system-message');
-      startGameBtn.disabled = true; // Disable until we have players and questions
-    }
-  });
-  
-  socket.on('gameJoined', ({ gameId, isMaster }) => {
-    currentGameId = gameId;
-    isGameMaster = isMaster;
-    gameIdDisplay.textContent = gameId;
-    
-    localStorage.setItem('currentGameId', gameId);
-    
-    gameInfoSection.style.display = 'block';
-    gamePlayArea.style.display = 'block';
-    gameMessagesSection.style.display = 'block';
-    
-    addGameMessage('You joined the game!', 'system-message');
-    addGameMessage('Waiting for the game to start...', 'system-message');
-  });
-  
-  socket.on('updatePlayers', (players) => {
-    updatePlayersList(players);
-    
-    // At least 2 players (including game master) to start
-    if (isGameMaster && players.length > 1) {
-      startGameBtn.disabled = false;
-    }
-  });  socket.on('aiQuestionsGenerated', ({ questions }) => {
-    // Re-enable the generate button
-    generateAIQuestionsBtn.disabled = false;
-    
-    // Check if we received questions
-    if (!questions || !Array.isArray(questions) || questions.length === 0) {
-      addGameMessage('No questions were generated. Please try a different topic.', 'wrong-answer');
-      return;
-    }
-    
-    // Clear existing questions
-    const questionInputs = document.getElementById('question-inputs');
-    questionInputs.innerHTML = '';
-    
-    try {
-      // Determine if we have multiple choice questions by safely checking the first question
-      const isMultipleChoice = questions[0] && questions[0].options && Array.isArray(questions[0].options);
+      floatingGameFeed.style.transform = 'translateY(0)';
       
-      // Add each AI-generated question
-      questions.forEach(q => {
-        const row = document.createElement('div');
-        row.className = 'question-input-row';
-        
-        if (isMultipleChoice) {
-          // Format the multiple choice question and sanitize data
-          try {
-            const optionsJson = JSON.stringify(q.options);
-            row.innerHTML = `
-              <input type="text" class="question-input" value="${escapeHTML(q.question)}" placeholder="Enter your question">
-              <input type="text" class="answer-input" value="${escapeHTML(q.options[q.correctOption])}" placeholder="Enter the answer">
-              <input type="hidden" class="options-input" value='${escapeHTML(optionsJson)}'>
-              <input type="hidden" class="correct-option-input" value="${q.correctOption}">
-            `;
-          } catch (optionError) {
-            console.error("Error processing multiple choice question:", optionError);
-            // Create a simple fallback
-            row.innerHTML = `
-              <input type="text" class="question-input" value="${escapeHTML(q.question || 'Question unavailable')}" placeholder="Enter your question">
-              <input type="text" class="answer-input" value="Answer unavailable" placeholder="Enter the answer">
-            `;
-          }
-        } else {
-          // Regular question
-          row.innerHTML = `
-            <input type="text" class="question-input" value="${escapeHTML(q.question)}" placeholder="Enter your question">
-            <input type="text" class="answer-input" value="${escapeHTML(q.answer)}" placeholder="Enter the answer">
-          `;
-        }
-        
-        questionInputs.appendChild(row);
-      });
-      
-      generateAIQuestionsBtn.disabled = false;      addGameMessage(`${questions.length} ${isMultipleChoice ? 'multiple-choice' : ''} questions generated about "${currentTopic}"!`, 'system-message');
-      
-      // Update the multiple choice toggle to match
-      const multipleChoiceToggle = document.querySelector('#multiple-choice-toggle');
-      if (multipleChoiceToggle) {
-        multipleChoiceToggle.checked = isMultipleChoice;
+      // Hide the original game feed when our floating feed appears
+      const originalGameMessages = document.getElementById('gameMessages');
+      if (originalGameMessages) {
+        originalGameMessages.style.display = 'none';
       }
-    } catch (error) {
-      console.error('Error processing AI generated questions:', error);
-      addGameMessage('Error processing questions. Please try again.', 'wrong-answer');
-    }
-  });
-    socket.on('questionsAdded', ({ count }) => {
-    try {
-      addGameMessage(`${count} questions ready for the game!`, 'system-message');
-    } catch (error) {
-      console.error('Error handling questions added event:', error);
-      addGameMessage('Questions have been added to the game.', 'system-message');
-    }
-  });
-    socket.on('gameStarted', ({ question, options, isMultipleChoice }) => {
-    currentQuestion = question;
-    gameQuestion.textContent = question;
-    
-    if (isGameMaster) {
-      gameMasterControls.style.display = 'none';
-      addGameMessage('Game started! Players are guessing now.', 'system-message');
-    } else {
-      playerGuessControls.style.display = 'block';
-      
-      // Handle multiple choice questions
-      const optionsContainer = document.getElementById('options-container');
-      const guessInputContainer = document.querySelector('.guess-input-container');
-      const submitOptionBtn = document.getElementById('submit-option-btn');
-      const optionsList = document.querySelector('.options-list');
-      const mcAttemptsLeft = document.getElementById('mc-attempts-left');
-      
-      if (isMultipleChoice && options) {
-        // Show multiple choice options
-        optionsContainer.style.display = 'block';
-        guessInputContainer.style.display = 'none';
-        
-        // Generate option elements
-        optionsList.innerHTML = '';
-        options.forEach((option, index) => {
-          const optionItem = document.createElement('div');
-          optionItem.className = 'option-item';
-          
-          optionItem.innerHTML = `
-            <input type="radio" id="option-${index}" name="mc-option" value="${index}">
-            <label for="option-${index}">${option}</label>
-          `;
-          
-          optionsList.appendChild(optionItem);
-        });
-        
-        // Set up submit button
-        submitOptionBtn.disabled = false;
-        submitOptionBtn.onclick = submitGuess;
-        
-        mcAttemptsLeft.textContent = '3';
-        addGameMessage('Game started! Select the correct answer.', 'system-message');
-      } else {
-        // Show text input for regular questions
-        optionsContainer.style.display = 'none';
-        guessInputContainer.style.display = 'block';
-        submitGuessBtn.disabled = false;
-        guessInput.disabled = false;
-        attemptsLeft.textContent = '3';
-        addGameMessage('Game started! Try to guess the answer.', 'system-message');
-      }
-    }
-  });
-  
-  socket.on('timerUpdate', ({ timeLeft: time }) => {
-    timeLeft.textContent = time;
-    if (time <= 10) {
-      gameTimer.classList.add('urgent');
-    } else {
-      gameTimer.classList.remove('urgent');
-    }
-  });
-  
-  socket.on('wrongGuess', ({ remainingAttempts, message }) => {
-    addGameMessage(message, 'wrong-answer');
-    attemptsLeft.textContent = remainingAttempts;
-    
-    if (remainingAttempts === 0) {
-      submitGuessBtn.disabled = true;
-      guessInput.disabled = true;
-    }
-  });
-  
-  socket.on('playerGuessed', ({ playerName: name, remainingAttempts }) => {
-    addGameMessage(`${name} made a wrong guess (${remainingAttempts} attempts left)`, 'system-message');
-  });
-  socket.on('roundEnded', ({ winner, answer, scores, currentRound, totalRounds }) => {
-    // Create and show the popup for round winner
-    const popup = document.createElement('div');
-    popup.className = 'win-popup';
-    popup.textContent = winner.id === socket.id ? 
-        '🎉 You won this round!' : 
-        `🎉 ${winner.name} won this round!`;
-    document.body.appendChild(popup);
+    }, 300);
+  }
 
-    // Remove popup after animation
-    setTimeout(() => {
-        popup.remove();
-    }, 3000);
-    
-    addGameMessage(`${winner.name} won this round! The answer was: ${answer}`, 'correct-answer');
-    addGameMessage(`Round ${currentRound} of ${totalRounds} completed.`, 'system-message');
-    
-    // Display transition message
-    if (currentRound < totalRounds) {
-      addGameMessage('The winner will be the game master for the next round.', 'system-message');
-    } else {
-      addGameMessage('All rounds completed! Determining the final winner...', 'system-message');
-    }
-    
-    updatePlayersList(scores);
-    
-    // Reset controls for next round
-    playerGuessControls.style.display = 'none';
-    guessInput.disabled = true;
-    submitGuessBtn.disabled = true;
-    
-    // Reset other controls
-    const optionsContainer = document.getElementById('options-container');
-    if (optionsContainer) {
-      optionsContainer.style.display = 'none';
-    }
-    const guessInputContainer = document.querySelector('.guess-input-container');
-    if (guessInputContainer) {
-      guessInputContainer.style.display = 'none';
-    }
+  // Add the message to the feed items array
+  const timestamp = new Date().toLocaleTimeString();
+  floatingFeedItems.push({
+    message,
+    type,
+    timestamp
   });
-    socket.on('gameEnded', ({ winner, finalScores, newMaster }) => {
-    // Create end game modal with winner announcement and options
-    const endGameModal = document.createElement('div');
-    endGameModal.className = 'end-game-modal';
+  
+  // Keep only the most recent messages
+  const maxItems = isGameFeedExpanded ? MAX_FEED_ITEMS_EXPANDED : MAX_FEED_ITEMS_COLLAPSED;
+  while (floatingFeedItems.length > maxItems) {
+    floatingFeedItems.shift();
+  }
+  
+  // Update the feed display
+  updateFloatingFeedDisplay();
+  
+  // Pulse the show feed button if it exists and feed is hidden
+  const showFeedBtn = document.getElementById('show-feed-btn');
+  if (showFeedBtn && floatingGameFeed.style.transform !== 'translateY(0)') {
+    showFeedBtn.classList.add('pulse');
     
-    const modalContent = document.createElement('div');
-    modalContent.className = 'end-game-modal-content';
+    // Stop pulsing after a few seconds
+    setTimeout(() => {
+      showFeedBtn.classList.remove('pulse');
+    }, 3000);
+  }
+}
+
+/**
+ * Update the floating feed display with current items
+ */
+function updateFloatingFeedDisplay() {
+  if (!floatingGameFeed) return;
+  
+  // Find the feed container
+  const feedContainer = floatingGameFeed.querySelector('div:nth-child(2)');
+  if (!feedContainer) return;
+  
+  // Clear existing content
+  feedContainer.innerHTML = '';
+  
+  // Add feed items
+  floatingFeedItems.forEach(item => {
+    const feedItem = document.createElement('div');
+    feedItem.className = `feed-item ${item.type}`;
     
-    const winnerAnnouncement = document.createElement('h2');
-    winnerAnnouncement.className = 'winner-title';
-    winnerAnnouncement.innerHTML = `🏆 ${winner.name} wins! 🏆`;
+    // Create icon based on type
+    const icon = document.createElement('span');
+    icon.className = `feed-icon ${item.type}`;
     
-    const scoreDisplay = document.createElement('p');
-    scoreDisplay.className = 'winner-score';
-    scoreDisplay.textContent = `Final score: ${winner.score} points`;
+    // Set icon content based on type
+    switch (item.type) {
+      case 'info':
+        icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1s1 .45 1 1v4c0 .55-.45 1-1 1zm1-8h-2V7h2v2z"/></svg>';
+        break;
+      case 'success':
+        icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+        break;
+      case 'warning':
+        icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></svg>';
+        break;
+      case 'error':
+        icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
+        break;
+      default:
+        icon.innerHTML = 'ℹ️';
+    }
     
-    const optionsContainer = document.createElement('div');
-    optionsContainer.className = 'end-game-options';
-      const restartBtn = document.createElement('button');
-    restartBtn.className = 'game-btn restart-game-btn';
-    restartBtn.textContent = '🔄 Start New Game';
-    restartBtn.onclick = () => {
-      endGameModal.remove();
+    // Create message container
+    const messageContainer = document.createElement('div');
+    messageContainer.style.cssText = `
+      flex-grow: 1;
+      overflow: hidden;
+    `;
+    
+    // Add message text
+    const messageText = document.createElement('div');
+    messageText.textContent = item.message;
+    messageText.style.cssText = `
+      color: #fff;
+      white-space: normal;
+      word-break: break-word;
+    `;
+    messageContainer.appendChild(messageText);
+    
+    // Format timestamp
+    const formattedTime = formatTimestamp(item.timestamp);
+    
+    // Add timestamp
+    const timestamp = document.createElement('div');
+    timestamp.textContent = formattedTime;
+    timestamp.style.cssText = `
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 2px;
+    `;
+    messageContainer.appendChild(timestamp);
+    
+    // Assemble feed item
+    feedItem.appendChild(icon);
+    feedItem.appendChild(messageContainer);
+    feedContainer.appendChild(feedItem);
+  });
+  
+  // If feed is hidden, show it
+  if (floatingGameFeed.style.transform !== 'translateY(0)') {
+    floatingGameFeed.style.transform = 'translateY(0)';
+    
+    // Remove the show feed button if it exists
+    const showFeedBtn = document.getElementById('show-feed-btn');
+    if (showFeedBtn) {
+      showFeedBtn.remove();
+    }
+  }
+  
+  // Auto-scroll to the bottom
+  feedContainer.scrollTop = feedContainer.scrollHeight;
+}
+
+/**
+ * Format a timestamp to display in a user-friendly way
+ * @param {string} timestamp - The timestamp to format
+ * @returns {string} The formatted timestamp
+ */
+function formatTimestamp(timestamp) {
+  if (!timestamp) return '';
+  
+  const now = new Date();
+  const msgTime = new Date(timestamp);
+  
+  // If the timestamp is from today, just show the time
+  if (now.toDateString() === msgTime.toDateString()) {
+    // Use the existing time format from timestamp
+    return timestamp.split(' ')[0];
+  }
+  
+  // Otherwise show a short date format
+  return msgTime.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + 
+         ' ' + timestamp.split(' ')[0];
+}
+
+/**
+ * Play a sound notification for important game events
+ * @param {string} type - The type of sound to play: 'info', 'success', 'warning', 'error'
+ */
+function playNotificationSound(type = 'info') {
+  // Create audio context on demand
+  if (!window.notificationAudioContext) {
+    try {
+      window.notificationAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('Audio notifications not supported in this browser');
+      return;
+    }
+  }
+  
+  const context = window.notificationAudioContext;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  
+  // Configure based on notification type
+  switch (type) {
+    case 'success':
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(659.25, context.currentTime); // E5
+      oscillator.frequency.setValueAtTime(783.99, context.currentTime + 0.1); // G5
+      gain.gain.setValueAtTime(0.1, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.5);
+      break;
       
-      // Two options: completely new game or restart current game
-      const newGameOptions = document.createElement('div');
-      newGameOptions.className = 'new-game-options-modal';
+    case 'error':
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(330, context.currentTime); // E4
+      oscillator.frequency.setValueAtTime(349.23, context.currentTime + 0.1); // F4
+      gain.gain.setValueAtTime(0.1, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.5);
+      break;
       
-      const optionsContent = document.createElement('div');
-      optionsContent.className = 'new-game-options-content';
+    case 'warning':
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(466.16, context.currentTime); // A#4/Bb4
+      gain.gain.setValueAtTime(0.1, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.3);
+      break;
       
-      optionsContent.innerHTML = `
-        <h3>Start a New Game</h3>
-        <p>Choose an option:</p>
-        <button id="brand-new-game" class="game-btn">Create Brand New Game</button>
-        <button id="restart-current-game" class="game-btn">Restart Current Game (Keep Players)</button>
-        <button id="cancel-restart" class="game-btn game-btn-secondary">Cancel</button>
+    default: // info
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(523.25, context.currentTime); // C5
+      gain.gain.setValueAtTime(0.07, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.2);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.2);
+  }
+}
+
+/**
+ * Toggle the visibility of the floating feed
+ */
+function toggleFloatingFeed() {
+  if (!floatingGameFeed) return;
+  
+  // Find the original bottom game feed container
+  const originalGameMessages = document.getElementById('gameMessages');
+  
+  if (floatingGameFeed.style.transform === 'translateY(0px)') {
+    // Hide floating feed
+    floatingGameFeed.style.transform = 'translateY(-150%)';
+    
+    // Show the original game feed if it exists
+    if (originalGameMessages) {
+      originalGameMessages.style.display = '';
+    }
+    
+    // Show toggle button
+    if (!document.getElementById('show-feed-btn')) {
+      const showFeedBtn = document.createElement('button');
+      showFeedBtn.id = 'show-feed-btn';
+      showFeedBtn.innerHTML = '💬';
+      showFeedBtn.title = 'Show Game Feed';
+      showFeedBtn.style.cssText = `
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background-color: var(--game-primary, #2196F3);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        z-index: 9998;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.3s ease;
       `;
       
-      newGameOptions.appendChild(optionsContent);
-      document.body.appendChild(newGameOptions);
+      showFeedBtn.onclick = toggleFloatingFeed;
+      document.body.appendChild(showFeedBtn);
+    }
+  } else {    // Show floating feed
+    floatingGameFeed.style.transform = 'translateY(0)';
+    
+    // Hide the original game feed if it exists
+    if (originalGameMessages) {
+      originalGameMessages.style.display = 'none';
       
-      // Brand new game button
-      document.getElementById('brand-new-game').addEventListener('click', () => {
-        newGameOptions.remove();
-        // Reset UI to prepare for a completely new game
-        playerGuessControls.style.display = 'none';
-        gameMasterControls.style.display = 'none';
-        gameMessagesSection.style.display = 'none';
-        gameInfoSection.style.display = 'none';
-        gamePlayArea.style.display = 'none';
-        gameSetupSection.style.display = 'block';
-        gameMessages.innerHTML = '';
-        currentGameId = null;
-        addGameMessage('Ready to start a new game!', 'system-message');
+      // Sync any messages from the original feed that might have been added
+      syncOriginalMessagesToFloatingFeed();
+    }
+    
+    const showFeedBtn = document.getElementById('show-feed-btn');
+    if (showFeedBtn) {
+      showFeedBtn.remove();
+    }
+  }
+}
+
+/**
+ * Add a high-priority notification that will show the feed even if it's hidden
+ * @param {string} message - Message to display
+ * @param {string} type - Message type: 'info', 'success', 'warning', 'error' 
+ */
+function addHighPriorityNotification(message, type) {
+  // First add to feed
+  addToFloatingFeed(message, type);
+  
+  // Make sure feed is visible
+  if (floatingGameFeed && floatingGameFeed.style.transform !== 'translateY(0px)') {
+    toggleFloatingFeed();
+  }
+  
+  // Play sound for immediate attention
+  playNotificationSound(type);
+}
+
+/**
+ * Clear all items from the floating feed
+ */
+function clearFloatingFeed() {
+  floatingFeedItems = [];
+  if (floatingGameFeed) {
+    const feedContainer = floatingGameFeed.querySelector('div:nth-child(2)');
+    if (feedContainer) {
+      feedContainer.innerHTML = '';
+    }
+    addToFloatingFeed('Feed cleared', 'info');
+  }
+}
+
+// Add keyboard shortcut listeners
+document.addEventListener('keydown', (event) => {
+  // Alt+F to toggle feed visibility
+  if (event.altKey && event.key === 'f') {
+    toggleFloatingFeed();
+    event.preventDefault();
+  }
+  
+  // Alt+C to clear feed
+  if (event.altKey && event.key === 'c' && floatingGameFeed) {
+    clearFloatingFeed();
+    event.preventDefault();
+  }
+});
+
+// Function to initialize the controller
+function initializeGameController() {
+  console.log('Initializing game controller');
+  updateGameStatus('Initializing game system...', 'info');
+  
+  try {
+    // Create controller
+    gameController = new GameController();
+    
+    // Make controller available globally for debugging
+    window.gameController = gameController;
+    
+    // Make gameDebug available globally for consistency
+    window.gameDebug = GameDebug;
+    
+    // Make addToFloatingFeed function available globally so GameUI can use it
+    window.addToFloatingFeed = addToFloatingFeed;
+    
+    // Connect to socket.io if available through controller
+    if (gameController.socket) {
+      console.log('Socket.io connection detected - setting up game event listeners');
+      updateGameStatus('Connected to game server', 'success');
+    }
+    
+    // Mark as initialized
+    gameInitEvents.controllerInitialized = true;
+    updateGameStatus('Game controller initialized', 'success');
+    
+    // Find the game launch button (created by gameInit.js)
+    const launchBtn = document.getElementById('game-launcher-btn');
+    if (launchBtn) {
+      console.log('Found game launch button - attaching controller');
+      updateGameStatus('Game button connected', 'info');
+      
+      // Create a new button to replace the old one (removes all existing handlers)
+      const newBtn = launchBtn.cloneNode(true);
+      if (launchBtn.parentNode) {
+        launchBtn.parentNode.replaceChild(newBtn, launchBtn);
+        
+        // Add the proper click handler that's guaranteed to work
+        newBtn.onclick = function() {
+          console.log('FIXED Game button clicked - opening overlay');
+          updateGameStatus('Opening game...', 'info');
+          if (window.gameController && window.gameController.ui) {
+            window.gameController.ui.openGameOverlay();
+            updateGameStatus('Game ready!', 'success');
+          } else {
+            console.error('Game controller not available - attempting recovery');
+            updateGameStatus('Repairing game system...', 'warning');
+            // Replace alert with console warning
+            console.warn('Please wait while we set up the game...');
+            
+            // Try to force load the system
+            setTimeout(() => {
+              if (window.gameDebug && window.gameDebug.forceLoadGameSystem) {
+                window.gameDebug.forceLoadGameSystem();
+                
+                // Check again after loading
+                setTimeout(() => {
+                  if (window.gameController && window.gameController.ui) {
+                    window.gameController.ui.openGameOverlay();
+                    updateGameStatus('Game ready!', 'success');
+                  } else {
+                    updateGameStatus('Unable to load game. Redirecting...', 'error');
+                    window.location.href = 'game-launcher.html'; // Last resort
+                  }
+                }, 500);
+              }
+            }, 100);
+          }
+        };
+        
+        // Mark button as connected
+        gameInitEvents.buttonConnected = true;
+      }
+    } else {
+      console.error('Game launch button not found - attempting recovery');
+      updateGameStatus('Game button not found. Creating...', 'warning');
+      // Use async fixGameButton with proper error handling
+      GameDebug.fixGameButton()
+        .then(() => {
+          console.log('Button fix completed');
+          gameInitEvents.buttonConnected = true;
+          updateGameStatus('Game button created successfully', 'success');
+          
+          // Add a welcome message to the floating feed
+          addToFloatingFeed('Welcome to the 3MTT Guessing Game!', 'success');
+          addToFloatingFeed('Use this feed to stay updated on game events', 'info');
+        })
+        .catch(err => {
+          console.error('Error during button fix:', err);
+          updateGameStatus('Failed to create game button', 'error');
+        });
+    }
+    
+    // Verify system status
+    setTimeout(() => {
+      const status = GameDebug.checkGameSystem();
+      console.log('Game system status:', status);
+      
+      if (status.allSystemsGo) {
+        updateGameStatus('Game system ready!', 'success');
+        addToFloatingFeed('Game system is fully operational', 'success');
+      } else {
+        updateGameStatus('Game system needs repair', 'warning');
+        addToFloatingFeed('Some game features may not be working properly', 'warning');
+        console.warn('Some game systems are not working properly. Attempting repair...');
+        GameDebug.fixGameButton()
+          .then(() => {
+            updateGameStatus('Game system repaired', 'success');
+            addToFloatingFeed('Game system has been repaired', 'success');
+          })
+          .catch(err => {
+            console.error('Error fixing button:', err);
+            updateGameStatus('Error repairing game', 'error');
+            addToFloatingFeed('Unable to repair game system. Refresh the page to try again.', 'error');
+          });
+      }
+      
+      // Set UI initialized flag based on status
+      gameInitEvents.uiInitialized = status.uiInitialized;
+      
+      // Log final initialization status
+      console.log('Game system verification complete:', 
+                 status.allSystemsGo ? 'Success' : 'Issues detected');
+    }, 1000);
+    
+    console.log('Game controller initialization process started');
+  } catch (error) {
+    console.error('Error initializing game controller:', error);
+    updateGameStatus('Error initializing game', 'error');
+    // Emergency button creation in case of error
+    GameDebug.fixGameButton()
+      .catch(err => {
+        console.error('Error during emergency button creation:', err);
+        updateGameStatus('Critical error in game system', 'error');
       });
-      
-      // Restart current game button
-      document.getElementById('restart-current-game').addEventListener('click', () => {
-        newGameOptions.remove();
-        // Request server to restart the current game
-        if (currentGameId) {
-          socket.emit('restartGame', { gameId: currentGameId });
-          addGameMessage('Requesting game restart...', 'system-message');
+  }
+}
+
+// Add handler to listen for game events from controller
+function listenForGameEvents() {
+  if (window.gameController && window.gameController.on) {
+    // Listen for game start events
+    window.gameController.on('gameStarted', (data) => {
+      updateGameStatus(`Game started: ${data.gameName || 'New Game'}`, 'success');
+    });
+    
+    // Listen for round start/end events
+    window.gameController.on('roundStarted', () => {
+      updateGameStatus('New round started!', 'info');
+    });
+    
+    window.gameController.on('roundEnded', (result) => {
+      if (result.winner) {
+        updateGameStatus(`Round ended. Winner: ${result.winner}`, 'success');
+      } else {
+        updateGameStatus('Round ended', 'info');
+      }
+    });
+    
+    // Listen for connection issues
+    window.gameController.on('connectionError', () => {
+      updateGameStatus('Connection issue detected', 'error');
+      addHighPriorityNotification('Connection to game server lost. Please check your internet connection.', 'error');
+    });
+    
+    window.gameController.on('connectionRestored', () => {
+      updateGameStatus('Connection restored', 'success');
+      addToFloatingFeed('Connection to game server has been restored', 'success');
+    });
+
+    // Socket.io event listeners for game updates
+    if (window.gameController.socket) {
+      const socket = window.gameController.socket;
+
+      // Game setup events
+      socket.on('gameCreated', ({ gameId }) => {
+        addHighPriorityNotification(`Game created! ID: ${gameId}`, 'success');
+      });
+
+      socket.on('gameJoined', () => {
+        addHighPriorityNotification('You joined the game!', 'success');
+      });
+
+      socket.on('playerJoined', ({ name, isAI }) => {
+        addToFloatingFeed(`${name}${isAI ? ' (AI)' : ''} joined the game`, 'info');
+      });
+
+      socket.on('updatePlayers', (players) => {
+        const count = players.length;
+        addToFloatingFeed(`${count} player${count !== 1 ? 's' : ''} in the game`, 'info');
+      });
+
+      socket.on('questionsAdded', ({ count }) => {
+        addToFloatingFeed(`${count} question${count !== 1 ? 's' : ''} added`, 'success');
+      });
+
+      // Game progress events
+      socket.on('gameStarted', ({ question, options, isMultipleChoice }) => {
+        addHighPriorityNotification('Game started! A new question was posed.', 'success');
+        
+        if (isMultipleChoice) {
+          addToFloatingFeed('This is a multiple choice question', 'info');
         }
       });
-      
-      // Cancel button
-      document.getElementById('cancel-restart').addEventListener('click', () => {
-        newGameOptions.remove();
+
+      socket.on('timerUpdate', ({ timeLeft }) => {
+        if (timeLeft === 30 || timeLeft === 15 || timeLeft === 10 || timeLeft === 5) {
+          if (timeLeft <= 10) {
+            addHighPriorityNotification(`${timeLeft} seconds remaining!`, 'warning');
+          } else {
+            addToFloatingFeed(`${timeLeft} seconds remaining`, 'info');
+          }
+        }
       });
-    };
-    
-    const continueBtn = document.createElement('button');
-    continueBtn.className = 'game-btn continue-game-btn';
-    continueBtn.textContent = '👑 Continue as Game Master';
-    continueBtn.onclick = () => {
-      endGameModal.remove();
-      if (isGameMaster) {
-        gameMasterControls.style.display = 'block';
-        document.getElementById('question-inputs').innerHTML = `
-          <div class="question-input-row">
-            <input type="text" class="question-input" placeholder="Enter your question">
-            <input type="text" class="answer-input" placeholder="Enter the answer">
-          </div>
-        `;
-        addGameMessage('You are now the game master. Create new questions!', 'system-message');
-      }
-    };
-    
-    const exitBtn = document.createElement('button');
-    exitBtn.className = 'game-btn exit-game-btn';
-    exitBtn.textContent = '❌ Exit Game';
-    exitBtn.onclick = () => {
-      endGameModal.remove();
-      closeGameOverlay();
-    };
-    
-    // Build the modal structure
-    optionsContainer.appendChild(restartBtn);
-    optionsContainer.appendChild(continueBtn);
-    optionsContainer.appendChild(exitBtn);
-    
-    modalContent.appendChild(winnerAnnouncement);
-    modalContent.appendChild(scoreDisplay);
-    modalContent.appendChild(optionsContainer);
-    endGameModal.appendChild(modalContent);
-    
-    // Add to page
-    document.body.appendChild(endGameModal);
-    
-    // Also add winner message to game feed
-    const winnerMessage = document.createElement('div');
-    winnerMessage.className = 'winner-announcement';
-    winnerMessage.textContent = `🏆 ${winner.name} wins the game with ${winner.score} points! 🏆`;
-    gameMessages.appendChild(winnerMessage);
-    
-    updatePlayersList(finalScores);
-    
-    // Reset game state
-    playerGuessControls.style.display = 'none';
-    gameMasterControls.style.display = 'none';
-    
-    // Update game master
-    isGameMaster = socket.id === newMaster;
-  });
-  
-  socket.on('newGameMaster', ({ masterId, masterName }) => {
-    isGameMaster = socket.id === masterId;
-    
-    if (isGameMaster) {
-      gameMasterControls.style.display = 'block';
-      playerGuessControls.style.display = 'none';
-      document.getElementById('question-inputs').innerHTML = `
-        <div class="question-input-row">
-          <input type="text" class="question-input" placeholder="Enter your question">
-          <input type="text" class="answer-input" placeholder="Enter the answer">
-        </div>
-      `;
-      addGameMessage('You are now the game master. Create new questions!', 'system-message');
-    } else {
-      playerGuessControls.style.display = 'none';
-      gameMasterControls.style.display = 'none';
-      addGameMessage(`${masterName} is now the game master`, 'system-message');
+
+      socket.on('playerGuessed', ({ playerName, remainingAttempts, guess, isAI }) => {
+        addToFloatingFeed(`${playerName} made a wrong guess (${remainingAttempts} attempts left)`, 'info');
+      });
+
+      socket.on('wrongGuess', ({ remainingAttempts, message }) => {
+        if (remainingAttempts === 0) {
+          addHighPriorityNotification('No more attempts left!', 'error');
+        } else {
+          addToFloatingFeed(message, 'warning');
+        }
+      });
+
+      socket.on('aiGuessedCorrect', ({ playerName, answer }) => {
+        addHighPriorityNotification(`${playerName} guessed correctly: "${answer}"`, 'success');
+      });
+
+      // Round completion events
+      socket.on('roundEnded', ({ winner, answer, scores, currentRound, totalRounds }) => {
+        addToFloatingFeed(`Round ${currentRound} of ${totalRounds} ended. The answer was: ${answer}`, 'info');
+        addHighPriorityNotification(`${winner.name} won this round!`, 'success');
+      });
+
+      socket.on('newRound', ({ roundNumber, totalRounds, newMasterName, isAIMaster }) => {
+        addHighPriorityNotification(`Round ${roundNumber} of ${totalRounds} starting!`, 'info');
+        addToFloatingFeed(`${newMasterName}${isAIMaster ? ' (AI)' : ''} is the new game master`, 'info');
+      });
+
+      socket.on('aiHostingRound', ({ aiName, topic, questionCount }) => {
+        addHighPriorityNotification(`${aiName} is hosting with ${questionCount} questions about "${topic}"`, 'info');
+      });
+
+      socket.on('gameEnded', ({ winner, finalScores, newMaster }) => {
+        addHighPriorityNotification(`Game over! ${winner.name} wins with ${winner.score} points!`, 'success');
+      });
+
+      socket.on('newGameMaster', ({ masterName }) => {
+        addToFloatingFeed(`${masterName} is now the game master`, 'info');
+      });
+
+      socket.on('gameRestarted', () => {
+        addHighPriorityNotification('Game has been restarted', 'info');
+      });
+
+      socket.on('playerLeft', ({ name }) => {
+        addToFloatingFeed(`${name} has left the game`, 'warning');
+      });
+
+      socket.on('error', (message) => {
+        addHighPriorityNotification(message, 'error');
+      });
     }
-  });
+  }
+}
+
+/**
+ * Sync messages from the original game feed to the floating feed
+ * This ensures we don't miss messages that may have been added directly to the original feed
+ */
+function syncOriginalMessagesToFloatingFeed() {
+  const originalMessages = document.getElementById('messages');
+  if (!originalMessages) return;
   
-  socket.on('playerLeft', ({ name }) => {
-    addGameMessage(`${name} has left the game`, 'system-message');
-  });
-    socket.on('error', (message) => {
-    addGameMessage(message, 'wrong-answer');
-  });
+  // Get all message elements from the original feed
+  const messageElements = originalMessages.querySelectorAll('.message');
+  if (!messageElements.length) return;
   
-  socket.on('playerJoined', ({ name, isAI }) => {
-    const message = isAI ? `${name} has joined the game as an AI player` : `${name} has joined the game`;
-    addGameMessage(message, 'system-message');
-  });
-  
-  socket.on('gameRestarted', ({ gameMaster, masterName, players }) => {
-    // Create a game restart notification
-    const restartNotice = document.createElement('div');
-    restartNotice.className = 'restart-notice';
-    restartNotice.innerHTML = `
-      <h3>Game Restarted!</h3>
-      <p>All scores have been reset</p>
-      <p>${masterName} is the game master</p>
-    `;
-    document.body.appendChild(restartNotice);
+  // Add each message to our floating feed with appropriate type
+  messageElements.forEach(message => {
+    // Skip if the message is already in our feed (simple duplicate check by text content)
+    if (floatingFeedItems.some(item => item.message === message.textContent)) {
+      return;
+    }
     
+    let type = 'info';
+    if (message.classList.contains('system-message')) {
+      type = 'info';
+    } else if (message.classList.contains('correct-answer')) {
+      type = 'success';
+    } else if (message.classList.contains('wrong-answer')) {
+      type = 'error';
+    } else if (message.classList.contains('player-message')) {
+      type = 'info';
+    }
+    
+    addToFloatingFeed(message.textContent, type);
+  });
+}
+
+/**
+ * Set up a mutation observer to watch for changes to the original game messages
+ * This ensures we catch any messages added directly to the original feed
+ */
+function setupOriginalMessagesSyncObserver() {
+  const originalMessages = document.getElementById('messages');
+  if (!originalMessages) return;
+  
+  // Create a new observer
+  const observer = new MutationObserver((mutations) => {
+    // When changes are detected, sync messages to our floating feed
+    syncOriginalMessagesToFloatingFeed();
+  });
+  
+  // Start observing
+  observer.observe(originalMessages, {
+    childList: true,  // Watch for changes to child elements
+    subtree: true,    // Watch the entire subtree
+    characterData: true // Watch for character data changes
+  });
+}
+
+// Wait for DOM to be fully loaded before initializing
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(() => {
+    initializeGameController();
+    
+    // Setup event listeners after controller is ready
+    setTimeout(listenForGameEvents, 1500);
+    
+    // Setup mutation observer for original messages
+    setTimeout(setupOriginalMessagesSyncObserver, 2000);
+  }, 100); // Small delay to ensure DOM is ready
+} else {
+  document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
-      restartNotice.remove();
-    }, 3000);
-    
-    // Update game state
-    isGameMaster = socket.id === gameMaster;
-    
-    // Reset game UI
-    gameMessages.innerHTML = '';
-    playerGuessControls.style.display = 'none';
-    gameMasterControls.style.display = 'none';
-    
-    addGameMessage('🔄 Game has been restarted! All scores are reset to 0.', 'system-message');
-    addGameMessage(`${masterName} is the game master.`, 'system-message');
-    
-    // Update player list with reset scores
-    updatePlayersList(players);
-    
-    if (isGameMaster) {
-      gameMasterControls.style.display = 'block';
-      document.getElementById('question-inputs').innerHTML = `
-        <div class="question-input-row">
-          <input type="text" class="question-input" placeholder="Enter your question">
-          <input type="text" class="answer-input" placeholder="Enter the answer">
-        </div>
-      `;
-      addGameMessage('You are now the game master. Create new questions!', 'system-message');
-    }
+      initializeGameController();
+          // Don't show onboarding instructions yet, they will be shown when the game is opened
+      // We'll move these messages to the GameUI openGameOverlay method
+      
+      // Setup event listeners after controller is ready
+      setTimeout(listenForGameEvents, 1500);
+      
+      // Setup mutation observer for original messages
+      setTimeout(setupOriginalMessagesSyncObserver, 2000);
+    }, 100);
   });
-    socket.on('newRound', ({ roundNumber, totalRounds, newMaster, newMasterName, isAIMaster }) => {
-    // Create a round transition notification
-    const roundTransition = document.createElement('div');
-    roundTransition.className = 'round-transition';
-    roundTransition.innerHTML = `
-      <h3>Round ${roundNumber} of ${totalRounds}</h3>
-      <p>${newMasterName} is the new game master!</p>
-    `;
-    document.body.appendChild(roundTransition);
-    
-    setTimeout(() => {
-      roundTransition.remove();
-    }, 3000);
-    
-    addGameMessage(`Round ${roundNumber} of ${totalRounds} - ${newMasterName} is the new game master!`, 'system-message');
-    
-    // Update game state
-    isGameMaster = socket.id === newMaster;
-    
-    // Reset controls
-    playerGuessControls.style.display = 'none';
-    gameMasterControls.style.display = 'none';
-    
-    // Reset guessing controls
-    guessInput.disabled = true;
-    submitGuessBtn.disabled = true;
-    const optionsContainer = document.getElementById('options-container');
-    if (optionsContainer) {
-      optionsContainer.style.display = 'none';
-    }
-    
-    if (isGameMaster) {
-      // Show game master controls with slight delay for better UX
-      setTimeout(() => {
-        gameMasterControls.style.display = 'block';
-        document.getElementById('question-inputs').innerHTML = `
-          <div class="question-input-row">
-            <input type="text" class="question-input" placeholder="Enter your question">
-            <input type="text" class="answer-input" placeholder="Enter the answer">
-          </div>
-        `;
-        addGameMessage('You are now the game master for this round. Create new questions!', 'system-message');
-      }, 1000);
-    } else {
-      if (isAIMaster) {
-        addGameMessage(`${newMasterName} (AI) is thinking of questions for this round...`, 'system-message');
-      } else {
-        addGameMessage('Waiting for the game master to create questions...', 'system-message');
-      }
-    }
-  });
-    socket.on('aiHostingRound', ({ aiName, topic, isMultipleChoice, questionCount }) => {
-    const questionType = isMultipleChoice ? 'multiple-choice' : 'standard';
-    
-    // Create a more prominent notification for AI hosting
-    const aiHostingNotice = document.createElement('div');
-    aiHostingNotice.className = 'ai-hosting-notice';
-    aiHostingNotice.innerHTML = `
-      <h3>AI Taking Control!</h3>
-      <p>${aiName} is now hosting the next round</p>
-      <p>Topic: ${topic}</p>
-      <p>${questionCount} ${questionType} questions</p>
-      <p>Get ready!</p>
-    `;
-    document.body.appendChild(aiHostingNotice);
-    
-    setTimeout(() => {
-      aiHostingNotice.remove();
-    }, 4000);
-    
-    addGameMessage(`${aiName} is hosting this round with ${questionCount} ${questionType} questions about ${topic}!`, 'system-message');
-    addGameMessage('Get ready - the game will start automatically in 3 seconds!', 'system-message');
-  });
-  
-  socket.on('aiGuessedCorrect', ({ playerName, answer }) => {
-    addGameMessage(`${playerName} guessed correctly: ${answer}`, 'correct-answer');
-  });
-});
+}
