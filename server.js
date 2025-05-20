@@ -281,8 +281,7 @@ io.on('connection', (socket) => {
       io.to(gameId).emit('playerJoined', { name: aiName, isAI: true });
     }
   });
-  
-  // Request to restart the game
+    // Request to restart the game
   socket.on('restartGame', ({ gameId }) => {
     const normalizedGameId = gameId.toLowerCase();
     const session = Array.from(gameSessions.entries()).find(
@@ -296,6 +295,14 @@ io.on('connection', (socket) => {
       session.isActive = false;
       session.currentRound = 0;
       session.roundWinners = [];
+      
+      // Make sure current game master is removed from AI players list if it's an AI
+      if (session.aiPlayers && session.players.get(session.gameMaster)?.isAI) {
+        const aiIndex = session.aiPlayers.indexOf(session.gameMaster);
+        if (aiIndex !== -1) {
+          session.aiPlayers.splice(aiIndex, 1);
+        }
+      }
       
       // Reset player scores while keeping the players
       session.players.forEach(player => {
@@ -421,12 +428,12 @@ function endRound(gameId, winnerId) {
       } else {
         io.to(gameId).emit('gameStarted', { question: nextQuestion.question });
       }
-      
-      // Handle AI players' guesses with random delay
+        // Handle AI players' guesses with random delay
       if (session.aiPlayers && session.aiPlayers.length > 0) {
         session.aiPlayers.forEach(aiPlayerId => {
           const aiPlayer = session.players.get(aiPlayerId);
-          if (aiPlayer && aiPlayer.isAI) {
+          // Skip if this AI player is the game master
+          if (aiPlayer && aiPlayer.isAI && aiPlayerId !== session.gameMaster) {
             // More strategic thinking time - faster when it "knows" the answer
             let thinkingTime;
             if (Math.random() < 0.9) { // When AI will answer correctly
@@ -562,13 +569,20 @@ function endRound(gameId, winnerId) {
       // Game is fully complete, find the overall winner
       session.isActive = false;
       const winner = findGameWinner(session);
-      
-      // Set the winner as the new game master
+        // Set the winner as the new game master
       session.gameMaster = winner.id;
       session.questions = [];
       session.currentQuestionIndex = -1;
       session.currentRound = 0; // Reset round counter
       session.roundWinners = []; // Reset round winners
+      
+      // If winner is an AI, remove them from the aiPlayers list to prevent them from guessing
+      if (session.aiPlayers && session.players.get(winner.id).isAI) {
+        const aiIndex = session.aiPlayers.indexOf(winner.id);
+        if (aiIndex !== -1) {
+          session.aiPlayers.splice(aiIndex, 1);
+        }
+      }
       
       io.to(gameId).emit('gameEnded', {
         winner: {
@@ -599,9 +613,16 @@ function endRound(gameId, winnerId) {
         newMasterName: roundWinner.name,
         isAIMaster: roundWinner.isAI
       });
-      
-      // If AI is the new game master, automatically generate questions
+        // If AI is the new game master, automatically generate questions
       if (session.players.get(roundWinner.id).isAI) {
+        // Remove AI from the players who can make guesses since it's now the game master
+        if (session.aiPlayers) {
+          const aiIndex = session.aiPlayers.indexOf(roundWinner.id);
+          if (aiIndex !== -1) {
+            session.aiPlayers.splice(aiIndex, 1);
+          }
+        }
+        
         // Wait a bit to simulate AI thinking about questions
         setTimeout(async () => {
           try {
