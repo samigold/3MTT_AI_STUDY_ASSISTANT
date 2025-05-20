@@ -731,6 +731,10 @@ function findGameWinner(session) {
   return winner;
 }
 
+app.get('/presentation', (req, res) => {
+  res.sendFile(__dirname + '/presentation.html');
+});
+
 // Start the server
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
