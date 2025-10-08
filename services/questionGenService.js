@@ -1,6 +1,6 @@
-const promptService = require("./promptService");
+const {promptService} = require("./promptService");
 
-const openAIService = require("./openAiService");
+const {openAIService} = require("./openAiService");
 
 const { parserService } = require("./parserService");
 
